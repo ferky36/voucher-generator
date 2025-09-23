@@ -1,5 +1,6 @@
--- supabase_users_patch.sql — profiles + safer RLS for claim/use (idempotent)
+-- supabase_users_patch_fixed.sql — fix RLS policies (no NEW.* references)
 
+-- PROFILES
 create table if not exists public.profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -30,6 +31,7 @@ do $$ begin
   end if;
 end $$;
 
+-- Trigger to auto-create profile on signup
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
@@ -49,6 +51,7 @@ begin
   end if;
 end $$;
 
+-- VOUCHERS FKs
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname='vouchers_claimed_by_fkey') then
@@ -63,29 +66,30 @@ begin
   end if;
 end $$;
 
--- Hapus policy update demo bila ada
+-- Replace old demo policy if exists
 do $$ begin
   if exists (select 1 from pg_policies where policyname='update status' and schemaname='public' and tablename='vouchers') then
     drop policy "update status" on public.vouchers;
   end if;
 end $$;
 
--- Klaim: hanya dari status new -> claimed oleh user sendiri
+-- Correct RLS policies (no NEW.*)
+-- Claim only: FROM status=new TO status=claimed by current user
 do $$ begin
   if not exists (select 1 from pg_policies where policyname='claim by self' and schemaname='public' and tablename='vouchers') then
     create policy "claim by self" on public.vouchers
       for update to authenticated
       using (status = 'new')
-      with check (new.status = 'claimed' and new.claimed_by = auth.uid());
+      with check (status = 'claimed' and claimed_by = auth.uid());
   end if;
 end $$;
 
--- Used: hanya oleh pemilik klaim
+-- Mark used: only owner of claim
 do $$ begin
   if not exists (select 1 from pg_policies where policyname='use by owner' and schemaname='public' and tablename='vouchers') then
     create policy "use by owner" on public.vouchers
       for update to authenticated
       using (claimed_by = auth.uid())
-      with check (new.claimed_by = auth.uid() and new.status in ('claimed','used'));
+      with check (claimed_by = auth.uid() and status in ('claimed','used'));
   end if;
 end $$;
