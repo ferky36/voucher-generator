@@ -48,6 +48,8 @@ btnLogout?.addEventListener('click', async ()=>{
 // Generate & reveal
 const btnGenerate = $('#btnGenerate');
 const genLoading = $('#genLoading');
+// Force hide loading right after query
+setHidden(genLoading, true);
 const claimWrap = $('#claimWrap');
 const revealSlider = $('#revealSlider');
 const voucherShow = $('#voucherShow');
