@@ -98,13 +98,45 @@ async function updateEligibility(){
       toastBadge(getStatusEl(), 'Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam '+left, 'warn');
     } else if (row.reason === 'HAS_ACTIVE_CLAIM'){
       toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
+      const active = await fetchActiveClaim();
+      if (active) showClaimUI(active);
     }
   }catch(e){ /* ignore */ }
 }
 
+// Ambil voucher yang sudah di-claim tapi belum dipakai
+async function fetchActiveClaim(){
+  try{
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from('vouchers')
+      .select('*')
+      .eq('claimed_by', user.id)
+      .is('used_at', null)
+      .order('claimed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return data || null;
+  }catch{ return null; }
+}
+
+function showClaimUI(row){
+  if (!row) return;
+  claimed = row;
+  usedMarked = false;
+  if (revealSlider) { revealSlider.value = 0; revealSlider.disabled = false; }
+  if (voucherCodeEl) voucherCodeEl.textContent = '';
+  setHidden(claimWrap, false);
+  setHidden(voucherShow, true);
+}
+
+
 
 
 let claimed = null;
+let usedMarked = false;
 
 btnGenerate.onclick = async () => {
   // Tampilkan loading hanya saat diproses
@@ -127,7 +159,9 @@ btnGenerate.onclick = async () => {
         const hours = Math.floor(sec/3600), minutes = Math.floor((sec%3600)/60);
         toastBadge(getStatusEl(), `Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam ${hours} jam ${minutes} menit.`, 'warn');
       } else if (msg.startsWith('NOT_ELIGIBLE:HAS_ACTIVE_CLAIM')){
-        toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
+        const row = await fetchActiveClaim();
+        if (row) { showClaimUI(row); toastBadge(getStatusEl(), 'Voucher kamu sudah tersedia. Geser slider untuk memunculkannya.', 'warn'); }
+        else { toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn'); }
       } else if (msg.startsWith('OUT_OF_STOCK')){
         toastBadge(getStatusEl(), 'Stok voucher habis', 'warn');
       } else {
@@ -157,10 +191,7 @@ revealSlider.addEventListener('input', async (e)=>{
     setHidden(voucherShow,false);
 
     // Tandai used via RPC
-    const { error } = await supabase.rpc('use_code', { p_id: claimed.id });
-    if (error){
-      alert('Gagal menandai sebagai used: '+error.message);
-    } else {
+    // RPC dipindah ke btnCopy; tidak update used_at di slider
       revealSlider.disabled = true;
       // btnGenerate tetap bisa diklik; hanya slider yang dikunci
     }
@@ -171,6 +202,10 @@ btnCopy.onclick = async ()=>{
   try{
     await navigator.clipboard.writeText(voucherCodeEl.textContent.trim());
     btnCopy.textContent='Tersalin ✔';
+    // Update used_at/used_by sekali saja saat tombol Copy diklik
+    if (!usedMarked && claimed) {
+      try { await supabase.rpc('use_code', { p_id: claimed.id }); usedMarked = true; } catch(_) { /* abaikan */ }
+    }
   }catch{
     btnCopy.textContent='Gagal copy';
   }
