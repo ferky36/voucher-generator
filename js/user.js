@@ -35,12 +35,22 @@ btnSendOtp?.addEventListener('click', async ()=>{
   const email = raw + '@dataon.com';
   if (!email.toLowerCase().endsWith('@dataon.com')) { toastBadge(otpStatus, 'Domain harus @dataon.com', 'warn'); return; }
 
-  const { error } = await supabase.auth.signInWithOtp({
-    email: email,
-    options: { emailRedirectTo: window.location.href }
-  });
-  if (error) toastBadge(otpStatus, error.message, 'warn');
-  else toastBadge(otpStatus, 'Link OTP dikirim ke '+email+'. Cek email kamu.');
+  if (btnSendOtp.disabled) return; // prevent double click
+  const prev = btnSendOtp.textContent;
+  btnSendOtp.disabled = true;
+  btnSendOtp.textContent = 'Mengirim…';
+  toastBadge(otpStatus, 'Mengirim link OTP…');
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email,
+      options: { emailRedirectTo: window.location.href }
+    });
+    if (error) toastBadge(otpStatus, error.message, 'warn');
+    else toastBadge(otpStatus, 'Link OTP dikirim ke '+email+'. Cek email kamu.');
+  } finally {
+    btnSendOtp.disabled = false;
+    btnSendOtp.textContent = prev;
+  }
 });
 
 btnLogout?.addEventListener('click', async ()=>{
