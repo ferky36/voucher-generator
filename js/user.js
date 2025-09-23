@@ -91,18 +91,16 @@ async function updateEligibility(){
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return;
     if (row.eligible){
-      btnGenerate.disabled = false;
       toastBadge(otpStatus, 'Siap generate');
     } else if (row.reason === 'COOLDOWN'){
-      btnGenerate.disabled = true;
       const left = formatRemaining(row.remaining_seconds);
-      toastBadge(otpStatus, 'Belum bisa generate. Coba lagi dalam '+left, 'warn');
+      toastBadge(otpStatus, 'Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam '+left, 'warn');
     } else if (row.reason === 'HAS_ACTIVE_CLAIM'){
-      btnGenerate.disabled = true;
-      toastBadge(otpStatus, 'Kamu masih punya voucher aktif. Gunakan dulu sebelum generate lagi.', 'warn');
+      toastBadge(otpStatus, 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
     }
   }catch(e){ /* ignore */ }
 }
+
 
 
 let claimed = null;
@@ -126,9 +124,9 @@ btnGenerate.onclick = async () => {
       if (msg.startsWith('NOT_ELIGIBLE:COOLDOWN:')){
         const sec = parseInt(msg.split(':')[2]||'0',10)||0;
         const hours = Math.floor(sec/3600), minutes = Math.floor((sec%3600)/60);
-        toastBadge(otpStatus, `Belum bisa generate. Coba lagi dalam ${hours} jam ${minutes} menit.`, 'warn');
+        toastBadge(otpStatus, `Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam ${hours} jam ${minutes} menit.`, 'warn');
       } else if (msg.startsWith('NOT_ELIGIBLE:HAS_ACTIVE_CLAIM')){
-        toastBadge(otpStatus, 'Kamu masih punya voucher aktif. Gunakan dulu sebelum generate lagi.', 'warn');
+        toastBadge(otpStatus, 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
       } else if (msg.startsWith('OUT_OF_STOCK')){
         toastBadge(otpStatus, 'Stok voucher habis', 'warn');
       } else {
@@ -163,7 +161,7 @@ revealSlider.addEventListener('input', async (e)=>{
       alert('Gagal menandai sebagai used: '+error.message);
     } else {
       revealSlider.disabled = true;
-      btnGenerate.disabled = true;
+      // btnGenerate tetap bisa diklik; hanya slider yang dikunci
     }
   }
 });
