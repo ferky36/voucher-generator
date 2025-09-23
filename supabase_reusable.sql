@@ -95,3 +95,60 @@ do $$ begin
     create policy "import by auth" on public.vouchers for insert to authenticated with check (true);
   end if;
 end $$;
+
+-- RPC: secure bulk import (bypass RLS safely)
+-- Hanya dapat dieksekusi oleh user terautentikasi. Jika tabel profiles
+-- ada dan role bukan admin/superadmin, akan ditolak.
+create or replace function public.import_vouchers(p_codes text[])
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  u uuid := auth.uid();
+  total int := coalesce(array_length(p_codes,1),0);
+  inserted int := 0;
+  invalid int := 0;
+begin
+  if u is null then
+    raise exception 'Unauthenticated' using errcode = '42501';
+  end if;
+
+  -- Opsional: hanya admin
+  if exists (
+    select 1 from information_schema.tables where table_schema='public' and table_name='profiles'
+  ) then
+    if not exists (
+      select 1 from public.profiles where user_id = u and role in ('admin','superadmin')
+    ) then
+      raise exception 'Only admin can import' using errcode = '42501';
+    end if;
+  end if;
+
+  with src as (
+    select distinct trim(c) as code
+    from unnest(coalesce(p_codes, '{}')) as t(c)
+  ),
+  valid as (
+    select code from src where code ~ '^[0-9]{5}-[0-9]{5}$'
+  ),
+  ins as (
+    insert into public.vouchers(code)
+    select code from valid
+    on conflict (code) do nothing
+    returning 1
+  )
+  select count(*) into inserted from ins;
+
+  select count(*) into invalid from src s where not (s.code ~ '^[0-9]{5}-[0-9]{5}$');
+
+  return json_build_object(
+    'total', total,
+    'inserted', inserted,
+    'invalid', invalid
+  );
+end $$;
+
+revoke all on function public.import_vouchers(text[]) from public;
+grant execute on function public.import_vouchers(text[]) to authenticated;

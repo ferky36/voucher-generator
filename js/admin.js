@@ -61,15 +61,16 @@ $('#btnImport').onclick = async () => {
 
   if (!ocrCodes.length) { alert('Tidak ada kode untuk diimport'); return; }
 
-  const rows = ocrCodes.map(code=>({ code }));
-  const chunk = 500;
-  for (let i=0;i<rows.length;i+=chunk){
-    const slice = rows.slice(i,i+chunk);
-    const { error } = await supabase.from('vouchers')
-      .upsert(slice, { onConflict:'code', ignoreDuplicates:true, returning:'minimal' });
+  // Import via secure RPC (bypass RLS, validasi format, only admin)
+  const chunk = 1000;
+  let inserted = 0, invalid = 0, total = 0;
+  for (let i=0;i<ocrCodes.length;i+=chunk){
+    const slice = ocrCodes.slice(i,i+chunk);
+    const { data, error } = await supabase.rpc('import_vouchers', { p_codes: slice });
     if (error){ toastBadge($('#importStatus'), error.message, 'warn'); return; }
+    if (data){ inserted += (data.inserted||0); invalid += (data.invalid||0); total += (data.total||0); }
   }
-  toastBadge($('#importStatus'), 'Import berhasil');
+  toastBadge($('#importStatus'), `Import OK: ${inserted} masuk, ${invalid} invalid dari ${total}`);
 };
 
 // RLS Diagnose (lists vouchers policies and current uid)
@@ -90,4 +91,35 @@ btnRlsDiag?.addEventListener('click', async () => {
     return;
   }
   if (diagOut) diagOut.textContent = JSON.stringify(data, null, 2);
+});
+
+// Profiles/Role helpers
+const roleStatus = $('#roleStatus');
+const btnWhoAmI = $('#btnWhoAmI');
+const btnMakeMeAdmin = $('#btnMakeMeAdmin');
+
+btnWhoAmI?.addEventListener('click', async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { toastBadge(roleStatus, 'Belum login', 'warn'); return; }
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id,email,role,created_at')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (error) { toastBadge(roleStatus, 'Gagal cek role: '+error.message, 'warn'); return; }
+  if (!data) { toastBadge(roleStatus, 'Belum ada profile. Klik "Jadikan Saya ADMIN" untuk membuat.', 'warn'); return; }
+  toastBadge(roleStatus, `Role: ${data.role || 'user'} (${data.email||user.email||''})`);
+});
+
+btnMakeMeAdmin?.addEventListener('click', async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { toastBadge(roleStatus, 'Belum login', 'warn'); return; }
+  const payload = { user_id: user.id, email: user.email, role: 'admin' };
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(payload, { onConflict: 'user_id', ignoreDuplicates: false })
+    .select()
+    .maybeSingle();
+  if (error) { toastBadge(roleStatus, 'Gagal set admin: '+error.message, 'warn'); return; }
+  toastBadge(roleStatus, 'Sukses: role kamu sekarang ADMIN');
 });
