@@ -8,9 +8,13 @@ const btnSendOtp = $('#btnSendOtp');
 const btnLogout = $('#btnLogout');
 const otpStatus = $('#otpStatus');
 const genStatus = $('#genStatus');
+const btnGenerate = $('#btnGenerate');
+const genLoading = $('#genLoading');
+try { setHidden(genLoading, true); } catch(e) {}
+const claimWrap = $('#claimWrap');
+const revealSlider = $('#revealSlider');
 
 // Pastikan loading tersembunyi saat awal muat
-try { setHidden(genLoading, true); } catch(e) {}
 
 (async ()=>{
   const { data:{ session } } = await supabase.auth.getSession();
@@ -68,12 +72,6 @@ btnLogout?.addEventListener('click', async ()=>{
 });
 
 // Generate & reveal
-const btnGenerate = $('#btnGenerate');
-const genLoading = $('#genLoading');
-// Force hide loading right after query
-setHidden(genLoading, true);
-const claimWrap = $('#claimWrap');
-const revealSlider = $('#revealSlider');
 // Warnai progress slider
 function paintSlider(slider){
   if (!slider) return;
