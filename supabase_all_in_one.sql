@@ -1,203 +1,113 @@
--- supabase_all_in_one.sql
--- Jalankan SATU file ini di Supabase SQL Editor.
--- Idempotent: aman dijalankan berulang.
+-- ==========================================================
+-- Voucher Generator – Reusable Full SQL (idempotent)
+-- - Tabel vouchers (validity_days, valid_until)
+-- - Tabel profiles (admin gate)
+-- - RLS dasar
+-- - Import: import_vouchers(text[]), import_vouchers_items(jsonb)
+-- - Eligibility: get_generate_eligibility()
+-- - Claim: claim_code()
+-- - Mark used: mark_voucher_used(bigint)
+-- ==========================================================
+set search_path = public;
 
--- 0) EXTENSIONS
-create extension if not exists pgcrypto;
+-- 0) EXTENSIONS (optional)
+-- create extension if not exists pgcrypto;
 
 -- 1) TABLES
+-- 1.1 vouchers
 create table if not exists public.vouchers (
-  id bigserial primary key,
-  code text not null unique,
-  status text not null default 'new',
-  validity_days integer,
-  valid_until timestamptz,
-  claimed_by uuid,
-  claimed_at timestamptz,
-  used_by uuid,
-  used_at timestamptz,
-  created_at timestamptz not null default now()
+  id           bigserial primary key,
+  code         text not null unique,
+  status       text not null default 'new',        -- 'new' | 'claimed' | 'used'
+  validity_days integer,                           -- masa berlaku per voucher (hari)
+  valid_until  timestamptz,                        -- opsional: tanggal kadaluarsa jika dihitung di import
+  claimed_by   uuid,
+  claimed_at   timestamptz,
+  used_by      uuid,
+  used_at      timestamptz,
+  created_at   timestamptz not null default now()
 );
 
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'vouchers_status_chk') then
-    alter table public.vouchers add constraint vouchers_status_chk check (status in ('new','claimed','used'));
-  end if;
-  if not exists (select 1 from pg_constraint where conname = 'vouchers_code_format_chk') then
-    alter table public.vouchers add constraint vouchers_code_format_chk check (code ~ '^[0-9]{5}-[0-9]{5}$');
-  end if;
-  if not exists (select 1 from pg_constraint where conname = 'vouchers_state_fields_chk') then
-    alter table public.vouchers add constraint vouchers_state_fields_chk check (
-      (status='new' and claimed_by is null and claimed_at is null and used_by is null and used_at is null)
-      or (status='claimed' and claimed_by is not null and claimed_at is not null)
-      or (status='used' and used_at is not null)
-    );
+    alter table public.vouchers
+      add constraint vouchers_status_chk
+      check (status in ('new','claimed','used'));
   end if;
 end $$;
 
--- Optional FKs to auth.users
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname='vouchers_claimed_by_fkey') then
-    alter table public.vouchers
-      add constraint vouchers_claimed_by_fkey
-      foreign key (claimed_by) references auth.users(id) on delete set null;
+-- tambahkan/selaraskan kolom (aman bila sudah ada)
+do $$ begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='vouchers' and column_name='validity_days'
+  ) then
+    alter table public.vouchers add column validity_days integer;
   end if;
-  if not exists (select 1 from pg_constraint where conname='vouchers_used_by_fkey') then
-    alter table public.vouchers
-      add constraint vouchers_used_by_fkey
-      foreign key (used_by) references auth.users(id) on delete set null;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='vouchers' and column_name='valid_until'
+  ) then
+    alter table public.vouchers add column valid_until timestamptz;
+  end if;
+
+  -- Jika sebelumnya pernah ada kolom valid_days, migrasikan nilainya
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='vouchers' and column_name='valid_days'
+  ) then
+    update public.vouchers
+       set validity_days = coalesce(public.vouchers.validity_days, public.vouchers.valid_days)
+     where public.vouchers.validity_days is null and public.vouchers.valid_days is not null;
+    -- optional: drop kolom lama
+    -- alter table public.vouchers drop column valid_days;
   end if;
 end $$;
 
--- PROFILES (optional but needed for admin gate)
+-- index bantu
+create index if not exists vouchers_status_idx         on public.vouchers (status);
+create index if not exists vouchers_claimed_by_idx     on public.vouchers (claimed_by);
+create index if not exists vouchers_used_by_idx        on public.vouchers (used_by);
+create index if not exists vouchers_active_claimed_idx on public.vouchers (claimed_by)
+  where status = 'claimed' and used_at is null;
+
+-- 1.2 profiles (untuk admin gate; ringan)
 create table if not exists public.profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  email text,
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  email       text,
   display_name text,
-  role text not null default 'user',
-  created_at timestamptz not null default now()
+  role        text not null default 'user',
+  created_at  timestamptz not null default now()
 );
+
 alter table public.profiles enable row level security;
 
 do $$ begin
-  if not exists (select 1 from pg_policies where policyname='profiles self select' and schemaname='public' and tablename='profiles') then
+  if not exists (
+    select 1 from pg_policies where policyname='profiles self select' and schemaname='public' and tablename='profiles'
+  ) then
     create policy "profiles self select" on public.profiles
       for select to authenticated using (auth.uid() = user_id);
   end if;
 end $$;
 
-do $$ begin
-  if not exists (select 1 from pg_policies where policyname='profiles self upsert' and schemaname='public' and tablename='profiles') then
-    create policy "profiles self upsert" on public.profiles
-      for insert to authenticated with check (auth.uid() = user_id);
-  end if;
-end $$;
-
-do $$ begin
-  if not exists (select 1 from pg_policies where policyname='profiles self update' and schemaname='public' and tablename='profiles') then
-    create policy "profiles self update" on public.profiles
-      for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
-  end if;
-end $$;
-
-create or replace function public.handle_new_user()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  insert into public.profiles(user_id, email)
-  values (new.id, new.email)
-  on conflict (user_id) do update set email = excluded.email;
-  return new;
-end;
-$$;
-
-do $$
-begin
-  if not exists (select 1 from pg_trigger where tgname='on_auth_user_created') then
-    create trigger on_auth_user_created
-    after insert on auth.users
-    for each row execute function public.handle_new_user();
-  end if;
-end $$;
-
--- 2) INDEXES
-create index if not exists idx_vouchers_status on public.vouchers (status);
-create index if not exists idx_vouchers_new_fifo on public.vouchers (id) where status = 'new';
-create index if not exists idx_vouchers_claimed_by on public.vouchers (claimed_by) where status in ('claimed','used');
-create index if not exists idx_vouchers_used_by on public.vouchers (used_by) where status = 'used';
-
--- 3) TRIGGER FN
-create or replace function public.vouchers_autotimestamps()
-returns trigger language plpgsql as $$
-begin
-  if new.status = 'claimed' and (old.status is distinct from 'claimed') then
-    new.claimed_at := coalesce(new.claimed_at, now());
-  end if;
-  if new.status = 'used' and (old.status is distinct from 'used') then
-    new.used_at := coalesce(new.used_at, now());
-  end if;
-  return new;
-end $$;
-
-drop trigger if exists trg_vouchers_autotimestamps on public.vouchers;
-create trigger trg_vouchers_autotimestamps
-before update on public.vouchers
-for each row execute function public.vouchers_autotimestamps();
-
--- 4) RLS POLICIES
+-- 2) RLS vouchers (aktif, RPC pakai SECURITY DEFINER)
 alter table public.vouchers enable row level security;
 
+-- (opsional) kebijakan select minimal untuk pemilik (tidak wajib jika baca via RPC)
 do $$ begin
-  -- replace any prior demo policy
-  if exists (select 1 from pg_policies where policyname='read all' and schemaname='public' and tablename='vouchers') then
-    drop policy "read all" on public.vouchers;
-  end if;
-  if not exists (select 1 from pg_policies where policyname='read all any' and schemaname='public' and tablename='vouchers') then
-    create policy "read all any" on public.vouchers for select to public using (true);
-  end if;
-end $$;
-
-do $$ begin
-  if not exists (select 1 from pg_policies where policyname='import by auth' and schemaname='public' and tablename='vouchers') then
-    create policy "import by auth" on public.vouchers for insert to authenticated with check (true);
+  if not exists (
+    select 1 from pg_policies where policyname='vouchers owner read' and schemaname='public' and tablename='vouchers'
+  ) then
+    create policy "vouchers owner read" on public.vouchers
+      for select to authenticated using (auth.uid() in (claimed_by, used_by));
   end if;
 end $$;
 
-do $$ begin
-  if not exists (select 1 from pg_policies where policyname='claim by self' and schemaname='public' and tablename='vouchers') then
-    create policy "claim by self" on public.vouchers
-      for update to authenticated
-      using (status = 'new')
-      with check (status = 'claimed' and claimed_by = auth.uid());
-  end if;
-end $$;
-
-do $$ begin
-  if not exists (select 1 from pg_policies where policyname='use by owner' and schemaname='public' and tablename='vouchers') then
-    create policy "use by owner" on public.vouchers
-      for update to authenticated
-      using (claimed_by = auth.uid())
-      with check (claimed_by = auth.uid() and status in ('claimed','used'));
-  end if;
-end $$;
-
--- 5) RPCs
-create or replace function public.claim_code(p_user uuid default null, p_fifo boolean default true)
-returns table(id bigint, code text, validity_days integer, valid_until timestamptz)
-language plpgsql
-as $$
-declare r record;
-begin
-  select v.id, v.code, v.validity_days, v.valid_until into r
-  from public.vouchers v
-  where v.status = 'new'
-  order by case when p_fifo then v.id end,
-           case when not p_fifo then random() end
-  for update skip locked
-  limit 1;
-
-  if not found then return; end if;
-
-  update public.vouchers v
-     set status='claimed', claimed_by=coalesce(p_user, auth.uid()), claimed_at=now()
-   where v.id = r.id;
-
-  id := r.id;
-  code := r.code;
-  validity_days := r.validity_days;
-  valid_until := r.valid_until;
-  return next;
-end $$;
-
-create or replace function public.use_code(p_id bigint, p_user uuid default null)
-returns void language plpgsql as $$
-begin
-  update public.vouchers v
-     set status='used', used_by=coalesce(p_user, auth.uid()), used_at=now()
-   where v.id=p_id and v.status in ('new','claimed');
-end $$;
-
+-- 3) IMPORT FUNCTIONS
+-- 3.1 import_vouchers(text[]) – hanya kode (tanpa validity_days)
 create or replace function public.import_vouchers(p_codes text[])
 returns json
 language plpgsql
@@ -205,21 +115,18 @@ security definer
 set search_path = public
 as $$
 declare
-  u uuid := auth.uid();
-  total int := coalesce(array_length(p_codes,1),0);
-  inserted int := 0;
-  invalid int := 0;
+  u        uuid := auth.uid();
+  total    int  := coalesce(array_length(p_codes,1),0);
+  inserted int  := 0;
+  invalid  int  := 0;
 begin
   if u is null then
     raise exception 'Unauthenticated' using errcode = '42501';
   end if;
 
-  if exists (
-    select 1 from information_schema.tables where table_schema='public' and table_name='profiles'
-  ) then
-    if not exists (
-      select 1 from public.profiles where user_id = u and role in ('admin','superadmin')
-    ) then
+  -- gate admin bila profiles ada
+  if exists (select 1 from information_schema.tables where table_schema='public' and table_name='profiles') then
+    if not exists (select 1 from public.profiles where user_id = u and role in ('admin','superadmin')) then
       raise exception 'Only admin can import' using errcode = '42501';
     end if;
   end if;
@@ -239,6 +146,7 @@ begin
   )
   select count(*) into inserted from ins;
 
+  -- hitung invalid dari input mentah (jangan refer CTE di statement lain)
   select count(*) into invalid
   from (
     select distinct trim(c) as code
@@ -246,17 +154,13 @@ begin
   ) s
   where not (s.code ~ '^[0-9]{5}-[0-9]{5}$');
 
-  return json_build_object(
-    'total', total,
-    'inserted', inserted,
-    'invalid', invalid
-  );
+  return json_build_object('total', total, 'inserted', inserted, 'invalid', invalid);
 end $$;
 
 revoke all on function public.import_vouchers(text[]) from public;
 grant execute on function public.import_vouchers(text[]) to authenticated;
 
--- New: JSON items import (code + validity_days)
+-- 3.2 import_vouchers_items(jsonb) – payload [{code, validity_days}]
 create or replace function public.import_vouchers_items(p_items jsonb)
 returns json
 language plpgsql
@@ -264,21 +168,18 @@ security definer
 set search_path = public
 as $$
 declare
-  u uuid := auth.uid();
-  total int := 0;
-  inserted int := 0;
-  invalid int := 0;
+  u        uuid := auth.uid();
+  total    int  := 0;
+  inserted int  := 0;
+  invalid  int  := 0;
 begin
   if u is null then
     raise exception 'Unauthenticated' using errcode = '42501';
   end if;
 
-  if exists (
-    select 1 from information_schema.tables where table_schema='public' and table_name='profiles'
-  ) then
-    if not exists (
-      select 1 from public.profiles where user_id = u and role in ('admin','superadmin')
-    ) then
+  -- gate admin bila profiles ada
+  if exists (select 1 from information_schema.tables where table_schema='public' and table_name='profiles') then
+    if not exists (select 1 from public.profiles where user_id = u and role in ('admin','superadmin')) then
       raise exception 'Only admin can import' using errcode = '42501';
     end if;
   end if;
@@ -291,9 +192,12 @@ begin
     where trim(coalesce(x.code,'')) <> ''
   ),
   valid as (
-    select code,
-           validity_days,
-           case when coalesce(validity_days,0) > 0 then now() + (coalesce(validity_days,0) || ' days')::interval end as valid_until
+    select
+      code,
+      validity_days,
+      case when coalesce(validity_days,0) > 0
+           then now() + (coalesce(validity_days,0) || ' days')::interval
+      end as valid_until
     from src
     where code ~ '^[0-9]{5}-[0-9]{5}$'
   ),
@@ -305,9 +209,9 @@ begin
   )
   select count(*) into inserted from ins;
 
-  select count(*) into total from (
-    select 1 from jsonb_to_recordset(coalesce(p_items, '[]'::jsonb)) as y(code text, validity_days int)
-  ) t;
+  -- total & invalid dari input mentah (tanpa refer CTE di statement lain)
+  select count(*) into total
+  from jsonb_to_recordset(coalesce(p_items, '[]'::jsonb)) as y(code text, validity_days int);
 
   select count(*) into invalid
   from (
@@ -316,49 +220,163 @@ begin
   ) s
   where not (s.code ~ '^[0-9]{5}-[0-9]{5}$');
 
-  return json_build_object(
-    'total', total,
-    'inserted', inserted,
-    'invalid', invalid
-  );
+  return json_build_object('total', total, 'inserted', inserted, 'invalid', invalid);
 end $$;
 
 revoke all on function public.import_vouchers_items(jsonb) from public;
 grant execute on function public.import_vouchers_items(jsonb) to authenticated;
 
--- Diagnostics helper
-create or replace function public.rls_diag()
-returns json
+-- 4) ELIGIBILITY / CLAIM / MARK USED
+-- 4.1 get_generate_eligibility()
+create or replace function public.get_generate_eligibility()
+returns table(eligible boolean, reason text, remaining_seconds integer)
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  u uuid := auth.uid();
-  rls json;
-  role_setting text;
+  uid uuid := auth.uid();
+  last_used_at timestamptz;
+  last_validity_days integer;
+  remain interval;
 begin
-  select current_setting('role', true) into role_setting;
+  if uid is null then
+    return query select false, 'UNAUTHENTICATED', null::integer;
+    return;
+  end if;
 
-  select json_agg(json_build_object(
-    'policyname', policyname,
-    'cmd', cmd,
-    'roles', roles,
-    'qual', qual,
-    'with_check', with_check
-  )) into rls
-  from pg_policies
-  where schemaname = 'public' and tablename = 'vouchers';
+  -- masih punya voucher aktif (claimed tapi belum used)
+  if exists (
+    select 1 from public.vouchers
+    where claimed_by = uid and status = 'claimed' and used_at is null
+    limit 1
+  ) then
+    return query select false, 'HAS_ACTIVE_CLAIM', null::integer;
+    return;
+  end if;
 
-  return json_build_object(
-    'uid', u,
-    'role_setting', role_setting,
-    'policies', coalesce(rls, '[]'::json)
-  );
+  -- cari voucher terakhir yang sudah dipakai
+  select v.used_at, v.validity_days
+    into last_used_at, last_validity_days
+  from public.vouchers v
+  where v.used_by = uid and v.used_at is not null
+  order by v.used_at desc
+  limit 1;
+
+  if last_used_at is null then
+    return query select true, null::text, null::integer; -- belum pernah pakai
+    return;
+  end if;
+
+  if now() < (last_used_at + make_interval(days => coalesce(last_validity_days, 7))) then
+    remain := (last_used_at + make_interval(days => coalesce(last_validity_days, 7))) - now();
+    return query select false, 'COOLDOWN', cast(extract(epoch from remain) as integer);
+    return;
+  end if;
+
+  return query select true, null::text, null::integer;
 end $$;
 
-revoke all on function public.rls_diag() from public;
-grant execute on function public.rls_diag() to authenticated;
-grant execute on function public.rls_diag() to anon;
+revoke all on function public.get_generate_eligibility() from public;
+grant execute on function public.get_generate_eligibility() to authenticated;
 
--- END
+-- 4.2 claim_code()
+create or replace function public.claim_code()
+returns setof public.vouchers
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  eligible_row record;
+  picked_id bigint;
+begin
+  if uid is null then
+    raise exception 'UNAUTHENTICATED';
+  end if;
+
+  -- tolak jika punya voucher aktif
+  if exists (
+    select 1 from public.vouchers
+    where claimed_by = uid and status = 'claimed' and used_at is null
+    limit 1
+  ) then
+    raise exception 'NOT_ELIGIBLE:HAS_ACTIVE_CLAIM';
+  end if;
+
+  -- cek cooldown
+  select * into eligible_row from public.get_generate_eligibility();
+  if not eligible_row.eligible then
+    if eligible_row.reason = 'COOLDOWN' then
+      raise exception 'NOT_ELIGIBLE:COOLDOWN:%', eligible_row.remaining_seconds;
+    else
+      raise exception 'NOT_ELIGIBLE:%', eligible_row.reason;
+    end if;
+  end if;
+
+  -- ambil 1 voucher 'new' aman dari race
+  with cte as (
+    select id
+    from public.vouchers
+    where status = 'new'
+    order by id
+    for update skip locked
+    limit 1
+  )
+  update public.vouchers v
+     set status = 'claimed',
+         claimed_by = uid,
+         claimed_at = now()
+  from cte
+  where v.id = cte.id
+  returning v.id into picked_id;
+
+  if picked_id is null then
+    raise exception 'OUT_OF_STOCK';
+  end if;
+
+  return query
+    select * from public.vouchers where id = picked_id;
+end $$;
+
+revoke all on function public.claim_code() from public;
+grant execute on function public.claim_code() to authenticated;
+
+-- 4.3 mark_voucher_used(bigint)
+create or replace function public.mark_voucher_used(p_voucher_id bigint)
+returns public.vouchers
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  row public.vouchers;
+begin
+  if uid is null then
+    raise exception 'UNAUTHENTICATED';
+  end if;
+
+  update public.vouchers v
+     set status = 'used',
+         used_at = now(),
+         used_by = uid
+   where v.id = p_voucher_id
+     and v.claimed_by = uid
+     and v.used_at is null
+  returning v.* into row;
+
+  if row.id is null then
+    raise exception 'CANNOT_MARK_USED';
+  end if;
+
+  return row;
+end $$;
+
+revoke all on function public.mark_voucher_used(bigint) from public;
+grant execute on function public.mark_voucher_used(bigint) to authenticated;
+
+-- ==========================================================
+-- END OF FILE
+-- ==========================================================
