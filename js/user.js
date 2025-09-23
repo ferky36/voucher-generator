@@ -7,6 +7,7 @@ const otpLocal = $('#otpLocal');
 const btnSendOtp = $('#btnSendOtp');
 const btnLogout = $('#btnLogout');
 const otpStatus = $('#otpStatus');
+const genStatus = $('#genStatus');
 
 // Pastikan loading tersembunyi saat awal muat
 try { setHidden(genLoading, true); } catch(e) {}
@@ -32,24 +33,24 @@ supabase.auth.onAuthStateChange((_evt, session)=>{
 
 btnSendOtp?.addEventListener('click', async ()=>{
   const raw = (otpLocal?.value || '').trim();
-  if (!raw) { toastBadge(otpStatus, 'Isi username dulu', 'warn'); return; }
-  if (raw.includes('@') || /\s/.test(raw)) { toastBadge(otpStatus, 'Masukkan username saja tanpa @', 'warn'); return; }
-  if (!/^[A-Za-z0-9._-]+$/.test(raw)) { toastBadge(otpStatus, 'Karakter username tidak valid', 'warn'); return; }
+  if (!raw) { toastBadge(getStatusEl(), 'Isi username dulu', 'warn'); return; }
+  if (raw.includes('@') || /\s/.test(raw)) { toastBadge(getStatusEl(), 'Masukkan username saja tanpa @', 'warn'); return; }
+  if (!/^[A-Za-z0-9._-]+$/.test(raw)) { toastBadge(getStatusEl(), 'Karakter username tidak valid', 'warn'); return; }
   const email = raw + '@dataon.com';
-  if (!email.toLowerCase().endsWith('@dataon.com')) { toastBadge(otpStatus, 'Domain harus @dataon.com', 'warn'); return; }
+  if (!email.toLowerCase().endsWith('@dataon.com')) { toastBadge(getStatusEl(), 'Domain harus @dataon.com', 'warn'); return; }
 
   if (btnSendOtp.disabled) return; // prevent double click
   const prev = btnSendOtp.textContent;
   btnSendOtp.disabled = true;
   btnSendOtp.textContent = 'Mengirim…';
-  toastBadge(otpStatus, 'Mengirim link OTP…');
+  toastBadge(getStatusEl(), 'Mengirim link OTP…');
   try {
     const { error } = await supabase.auth.signInWithOtp({
       email: email,
       options: { emailRedirectTo: window.location.href }
     });
-    if (error) toastBadge(otpStatus, error.message, 'warn');
-    else toastBadge(otpStatus, 'Link OTP dikirim ke '+email+'. Cek email kamu.');
+    if (error) toastBadge(getStatusEl(), error.message, 'warn');
+    else toastBadge(getStatusEl(), 'Link OTP dikirim ke '+email+'. Cek email kamu.');
   } finally {
     btnSendOtp.disabled = false;
     btnSendOtp.textContent = prev;
@@ -61,7 +62,7 @@ btnLogout?.addEventListener('click', async ()=>{
   userAuthBox?.classList.remove('hidden');
   document.body.classList.remove('auth');
   document.body.classList.add('unauth');
-  toastBadge(otpStatus, 'Logged out');
+  toastBadge(getStatusEl(), 'Logged out');
 });
 
 // Generate & reveal
@@ -91,12 +92,12 @@ async function updateEligibility(){
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return;
     if (row.eligible){
-      toastBadge(otpStatus, 'Siap generate');
+      toastBadge(getStatusEl(), 'Siap generate');
     } else if (row.reason === 'COOLDOWN'){
       const left = formatRemaining(row.remaining_seconds);
-      toastBadge(otpStatus, 'Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam '+left, 'warn');
+      toastBadge(getStatusEl(), 'Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam '+left, 'warn');
     } else if (row.reason === 'HAS_ACTIVE_CLAIM'){
-      toastBadge(otpStatus, 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
+      toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
     }
   }catch(e){ /* ignore */ }
 }
@@ -124,11 +125,11 @@ btnGenerate.onclick = async () => {
       if (msg.startsWith('NOT_ELIGIBLE:COOLDOWN:')){
         const sec = parseInt(msg.split(':')[2]||'0',10)||0;
         const hours = Math.floor(sec/3600), minutes = Math.floor((sec%3600)/60);
-        toastBadge(otpStatus, `Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam ${hours} jam ${minutes} menit.`, 'warn');
+        toastBadge(getStatusEl(), `Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam ${hours} jam ${minutes} menit.`, 'warn');
       } else if (msg.startsWith('NOT_ELIGIBLE:HAS_ACTIVE_CLAIM')){
-        toastBadge(otpStatus, 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
+        toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
       } else if (msg.startsWith('OUT_OF_STOCK')){
-        toastBadge(otpStatus, 'Stok voucher habis', 'warn');
+        toastBadge(getStatusEl(), 'Stok voucher habis', 'warn');
       } else {
         alert('Gagal generate: '+msg);
       }
@@ -174,3 +175,10 @@ btnCopy.onclick = async ()=>{
     btnCopy.textContent='Gagal copy';
   }
 };
+
+
+// Pilih badge sesuai state auth
+function getStatusEl(){
+  const isAuth = document.body.classList.contains('auth');
+  return isAuth && genStatus ? genStatus : otpStatus;
+}

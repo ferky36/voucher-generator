@@ -70,7 +70,8 @@
     <div class="card center authed-only">
       <button id="btnGenerate" class="primary" style="min-width:220px">Generate Voucher</button>
       <div id="genLoading" class="loading hidden">Sedang generate kode…</div>
-      <span id="otpStatus" class="badge hidden"></span>
+
+      <span id="genStatus" class="badge hidden"></span>
 
       <div id="claimWrap" class="hidden" style="width:100%">
         <p class="badge warn">Geser slider sampai penuh untuk <strong>menampilkan</strong> dan <strong>menggunakan</strong> voucher.</p>
@@ -81,7 +82,6 @@
             <span>100%</span>
           </div>
         </div>
-        <span id="otpStatus" class="badge hidden"></span>
         <div id="voucherShow" class="card hidden center" style="margin-top:12px;background:#0f131b">
           <div class="badge success">Voucher Anda</div>
           <div id="voucherCode" class="big codes">•••••-•••••</div>
