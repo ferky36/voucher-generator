@@ -19,10 +19,13 @@ try { setHidden(genLoading, true); } catch(e) {}
   try { setHidden(genLoading, true); } catch(e) {}
 })();
 
+updateEligibility();
+
 supabase.auth.onAuthStateChange((_evt, session)=>{
   document.body.classList.toggle('auth', !!session);
   document.body.classList.toggle('unauth', !session);
   try { setHidden(genLoading, true); } catch(e) {}
+  updateEligibility();
   if (session) userAuthBox?.classList.add('hidden');
   else userAuthBox?.classList.remove('hidden');
 });
@@ -72,6 +75,36 @@ const voucherShow = $('#voucherShow');
 const voucherCodeEl = $('#voucherCode');
 const btnCopy = $('#btnCopy');
 
+// === Eligibility helpers (UI-only) ===
+function formatRemaining(sec){
+  sec = Math.max(0, parseInt(sec||0,10));
+  const d = Math.floor(sec/86400); sec%=86400;
+  const h = Math.floor(sec/3600); sec%=3600;
+  const m = Math.floor(sec/60);
+  const parts=[]; if(d) parts.push(d+' hari'); if(h) parts.push(h+' jam'); if(m||(!d&&!h)) parts.push(m+' menit');
+  return parts.join(' ');
+}
+async function updateEligibility(){
+  try{
+    const { data, error } = await supabase.rpc('get_generate_eligibility');
+    if (error) return; // silent
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return;
+    if (row.eligible){
+      btnGenerate.disabled = false;
+      toastBadge(otpStatus, 'Siap generate');
+    } else if (row.reason === 'COOLDOWN'){
+      btnGenerate.disabled = true;
+      const left = formatRemaining(row.remaining_seconds);
+      toastBadge(otpStatus, 'Belum bisa generate. Coba lagi dalam '+left, 'warn');
+    } else if (row.reason === 'HAS_ACTIVE_CLAIM'){
+      btnGenerate.disabled = true;
+      toastBadge(otpStatus, 'Kamu masih punya voucher aktif. Gunakan dulu sebelum generate lagi.', 'warn');
+    }
+  }catch(e){ /* ignore */ }
+}
+
+
 let claimed = null;
 
 btnGenerate.onclick = async () => {
@@ -102,6 +135,7 @@ btnGenerate.onclick = async () => {
         alert('Gagal generate: '+msg);
       }
       setHidden(btnGenerate,false);
+      updateEligibility();
       return;
     }
     if (!data || !data.length){ alert('Stok voucher habis'); setHidden(btnGenerate,false); return; }
