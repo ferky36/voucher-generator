@@ -1,12 +1,7 @@
 -- ==========================================================
--- Voucher Generator – Reusable Full SQL (idempotent)
--- - Tabel vouchers (validity_days, valid_until)
--- - Tabel profiles (admin gate)
--- - RLS dasar
--- - Import: import_vouchers(text[]), import_vouchers_items(jsonb)
--- - Eligibility: get_generate_eligibility()
--- - Claim: claim_code()
--- - Mark used: mark_voucher_used(bigint)
+-- Voucher Generator – Reusable Full SQL (idempotent, updated)
+-- - Resolves PostgREST ambiguity by dropping overloaded claim_code variants
+-- - Tables, RLS, import functions, eligibility, claim, mark used
 -- ==========================================================
 set search_path = public;
 
@@ -16,16 +11,16 @@ set search_path = public;
 -- 1) TABLES
 -- 1.1 vouchers
 create table if not exists public.vouchers (
-  id           bigserial primary key,
-  code         text not null unique,
-  status       text not null default 'new',        -- 'new' | 'claimed' | 'used'
-  validity_days integer,                           -- masa berlaku per voucher (hari)
-  valid_until  timestamptz,                        -- opsional: tanggal kadaluarsa jika dihitung di import
-  claimed_by   uuid,
-  claimed_at   timestamptz,
-  used_by      uuid,
-  used_at      timestamptz,
-  created_at   timestamptz not null default now()
+  id            bigserial primary key,
+  code          text not null unique,
+  status        text not null default 'new',        -- 'new' | 'claimed' | 'used'
+  validity_days integer,
+  valid_until   timestamptz,
+  claimed_by    uuid,
+  claimed_at    timestamptz,
+  used_by       uuid,
+  used_at       timestamptz,
+  created_at    timestamptz not null default now()
 );
 
 do $$
@@ -37,7 +32,6 @@ begin
   end if;
 end $$;
 
--- tambahkan/selaraskan kolom (aman bila sudah ada)
 do $$ begin
   if not exists (
     select 1 from information_schema.columns
@@ -53,7 +47,6 @@ do $$ begin
     alter table public.vouchers add column valid_until timestamptz;
   end if;
 
-  -- Jika sebelumnya pernah ada kolom valid_days, migrasikan nilainya
   if exists (
     select 1 from information_schema.columns
     where table_schema='public' and table_name='vouchers' and column_name='valid_days'
@@ -61,25 +54,24 @@ do $$ begin
     update public.vouchers
        set validity_days = coalesce(public.vouchers.validity_days, public.vouchers.valid_days)
      where public.vouchers.validity_days is null and public.vouchers.valid_days is not null;
-    -- optional: drop kolom lama
+    -- optional: drop column valid_days
     -- alter table public.vouchers drop column valid_days;
   end if;
 end $$;
 
--- index bantu
 create index if not exists vouchers_status_idx         on public.vouchers (status);
 create index if not exists vouchers_claimed_by_idx     on public.vouchers (claimed_by);
 create index if not exists vouchers_used_by_idx        on public.vouchers (used_by);
 create index if not exists vouchers_active_claimed_idx on public.vouchers (claimed_by)
   where status = 'claimed' and used_at is null;
 
--- 1.2 profiles (untuk admin gate; ringan)
+-- 1.2 profiles (for admin gate)
 create table if not exists public.profiles (
-  user_id     uuid primary key references auth.users(id) on delete cascade,
-  email       text,
+  user_id      uuid primary key references auth.users(id) on delete cascade,
+  email        text,
   display_name text,
-  role        text not null default 'user',
-  created_at  timestamptz not null default now()
+  role         text not null default 'user',
+  created_at   timestamptz not null default now()
 );
 
 alter table public.profiles enable row level security;
@@ -93,10 +85,9 @@ do $$ begin
   end if;
 end $$;
 
--- 2) RLS vouchers (aktif, RPC pakai SECURITY DEFINER)
+-- 2) RLS vouchers
 alter table public.vouchers enable row level security;
 
--- (opsional) kebijakan select minimal untuk pemilik (tidak wajib jika baca via RPC)
 do $$ begin
   if not exists (
     select 1 from pg_policies where policyname='vouchers owner read' and schemaname='public' and tablename='vouchers'
@@ -107,7 +98,6 @@ do $$ begin
 end $$;
 
 -- 3) IMPORT FUNCTIONS
--- 3.1 import_vouchers(text[]) – hanya kode (tanpa validity_days)
 create or replace function public.import_vouchers(p_codes text[])
 returns json
 language plpgsql
@@ -124,7 +114,6 @@ begin
     raise exception 'Unauthenticated' using errcode = '42501';
   end if;
 
-  -- gate admin bila profiles ada
   if exists (select 1 from information_schema.tables where table_schema='public' and table_name='profiles') then
     if not exists (select 1 from public.profiles where user_id = u and role in ('admin','superadmin')) then
       raise exception 'Only admin can import' using errcode = '42501';
@@ -146,7 +135,6 @@ begin
   )
   select count(*) into inserted from ins;
 
-  -- hitung invalid dari input mentah (jangan refer CTE di statement lain)
   select count(*) into invalid
   from (
     select distinct trim(c) as code
@@ -160,7 +148,6 @@ end $$;
 revoke all on function public.import_vouchers(text[]) from public;
 grant execute on function public.import_vouchers(text[]) to authenticated;
 
--- 3.2 import_vouchers_items(jsonb) – payload [{code, validity_days}]
 create or replace function public.import_vouchers_items(p_items jsonb)
 returns json
 language plpgsql
@@ -177,7 +164,6 @@ begin
     raise exception 'Unauthenticated' using errcode = '42501';
   end if;
 
-  -- gate admin bila profiles ada
   if exists (select 1 from information_schema.tables where table_schema='public' and table_name='profiles') then
     if not exists (select 1 from public.profiles where user_id = u and role in ('admin','superadmin')) then
       raise exception 'Only admin can import' using errcode = '42501';
@@ -209,7 +195,6 @@ begin
   )
   select count(*) into inserted from ins;
 
-  -- total & invalid dari input mentah (tanpa refer CTE di statement lain)
   select count(*) into total
   from jsonb_to_recordset(coalesce(p_items, '[]'::jsonb)) as y(code text, validity_days int);
 
@@ -227,7 +212,12 @@ revoke all on function public.import_vouchers_items(jsonb) from public;
 grant execute on function public.import_vouchers_items(jsonb) to authenticated;
 
 -- 4) ELIGIBILITY / CLAIM / MARK USED
--- 4.1 get_generate_eligibility()
+
+-- IMPORTANT: Drop legacy overloaded claim_code variants to avoid PostgREST ambiguity
+drop function if exists public.claim_code(uuid, boolean);
+drop function if exists public.claim_code(uuid);
+drop function if exists public.claim_code(boolean);
+
 create or replace function public.get_generate_eligibility()
 returns table(eligible boolean, reason text, remaining_seconds integer)
 language plpgsql
@@ -245,7 +235,6 @@ begin
     return;
   end if;
 
-  -- masih punya voucher aktif (claimed tapi belum used)
   if exists (
     select 1 from public.vouchers
     where claimed_by = uid and status = 'claimed' and used_at is null
@@ -255,7 +244,6 @@ begin
     return;
   end if;
 
-  -- cari voucher terakhir yang sudah dipakai
   select v.used_at, v.validity_days
     into last_used_at, last_validity_days
   from public.vouchers v
@@ -264,7 +252,7 @@ begin
   limit 1;
 
   if last_used_at is null then
-    return query select true, null::text, null::integer; -- belum pernah pakai
+    return query select true, null::text, null::integer;
     return;
   end if;
 
@@ -280,7 +268,6 @@ end $$;
 revoke all on function public.get_generate_eligibility() from public;
 grant execute on function public.get_generate_eligibility() to authenticated;
 
--- 4.2 claim_code()
 create or replace function public.claim_code()
 returns setof public.vouchers
 language plpgsql
@@ -296,7 +283,6 @@ begin
     raise exception 'UNAUTHENTICATED';
   end if;
 
-  -- tolak jika punya voucher aktif
   if exists (
     select 1 from public.vouchers
     where claimed_by = uid and status = 'claimed' and used_at is null
@@ -305,7 +291,6 @@ begin
     raise exception 'NOT_ELIGIBLE:HAS_ACTIVE_CLAIM';
   end if;
 
-  -- cek cooldown
   select * into eligible_row from public.get_generate_eligibility();
   if not eligible_row.eligible then
     if eligible_row.reason = 'COOLDOWN' then
@@ -315,7 +300,6 @@ begin
     end if;
   end if;
 
-  -- ambil 1 voucher 'new' aman dari race
   with cte as (
     select id
     from public.vouchers
@@ -343,7 +327,6 @@ end $$;
 revoke all on function public.claim_code() from public;
 grant execute on function public.claim_code() to authenticated;
 
--- 4.3 mark_voucher_used(bigint)
 create or replace function public.mark_voucher_used(p_voucher_id bigint)
 returns public.vouchers
 language plpgsql
@@ -378,5 +361,5 @@ revoke all on function public.mark_voucher_used(bigint) from public;
 grant execute on function public.mark_voucher_used(bigint) to authenticated;
 
 -- ==========================================================
--- END OF FILE
+-- END
 -- ==========================================================
