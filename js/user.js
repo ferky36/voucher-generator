@@ -42,9 +42,6 @@ btnSendOtp?.addEventListener('click', async ()=>{
   if (error) toastBadge(otpStatus, error.message, 'warn');
   else toastBadge(otpStatus, 'Link OTP dikirim ke '+email+'. Cek email kamu.');
 });
-  if (error) toastBadge(otpStatus, error.message, 'warn');
-  else toastBadge(otpStatus, 'Link OTP dikirim. Cek email kamu.');
-});
 
 btnLogout?.addEventListener('click', async ()=>{
   await supabase.auth.signOut();
