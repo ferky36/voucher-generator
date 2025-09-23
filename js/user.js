@@ -8,16 +8,21 @@ const btnSendOtp = $('#btnSendOtp');
 const btnLogout = $('#btnLogout');
 const otpStatus = $('#otpStatus');
 
+// Pastikan loading tersembunyi saat awal muat
+try { setHidden(genLoading, true); } catch(e) {}
+
 (async ()=>{
   const { data:{ session } } = await supabase.auth.getSession();
   if (session) userAuthBox?.classList.add('hidden');
   document.body.classList.toggle('auth', !!session);
   document.body.classList.toggle('unauth', !session);
+  try { setHidden(genLoading, true); } catch(e) {}
 })();
 
 supabase.auth.onAuthStateChange((_evt, session)=>{
   document.body.classList.toggle('auth', !!session);
   document.body.classList.toggle('unauth', !session);
+  try { setHidden(genLoading, true); } catch(e) {}
   if (session) userAuthBox?.classList.add('hidden');
   else userAuthBox?.classList.remove('hidden');
 });
@@ -52,21 +57,31 @@ const btnCopy = $('#btnCopy');
 let claimed = null;
 
 btnGenerate.onclick = async () => {
-  setHidden(genLoading,false); setHidden(btnGenerate,true); setHidden(claimWrap,true); setHidden(voucherShow,true);
-  await sleep(900);
+  // Tampilkan loading hanya saat diproses
+  setHidden(genLoading,false);
+  setHidden(btnGenerate,true);
+  setHidden(claimWrap,true);
+  setHidden(voucherShow,true);
+  try {
+    await sleep(900);
 
-  const { data:{ session } } = await supabase.auth.getSession();
-  if (!session){ alert('Login dulu dengan OTP.'); setHidden(btnGenerate,false); setHidden(genLoading,true); return; }
+    const { data:{ session } } = await supabase.auth.getSession();
+    if (!session){ alert('Login dulu dengan OTP.'); setHidden(btnGenerate,false); return; }
 
-  // Klaim via RPC (otomatis pakai auth.uid())
-  const { data, error } = await supabase.rpc('claim_code');
-  setHidden(genLoading,true);
-  if (error){ alert('Gagal generate: '+error.message); setHidden(btnGenerate,false); return; }
-  if (!data || !data.length){ alert('Stok voucher habis'); setHidden(btnGenerate,false); return; }
+    // Klaim via RPC (otomatis pakai auth.uid())
+    const { data, error } = await supabase.rpc('claim_code');
+    if (error){ alert('Gagal generate: '+error.message); setHidden(btnGenerate,false); return; }
+    if (!data || !data.length){ alert('Stok voucher habis'); setHidden(btnGenerate,false); return; }
 
-  claimed = data[0];
-  revealSlider.value = 0;
-  setHidden(claimWrap,false);
+    claimed = data[0];
+    // Reset UI reveal
+    revealSlider.value = 0;
+    setHidden(claimWrap,false);
+    revealSlider.disabled = false;
+  } finally {
+    // Sembunyikan loading di semua kondisi
+    setHidden(genLoading,true);
+  }
 };
 
 revealSlider.addEventListener('input', async (e)=>{
