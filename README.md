@@ -1,14 +1,22 @@
-# Voucher OCR & Claim — Split Pages (GitHub Pages ready)
+# Voucher OCR & Claim — OTP + Admin (Supabase + HTML/JS)
 
-Halaman:
-- `index.html` (home, link ke admin & user)
-- `admin.html` (OCR + import)
-- `user.html` (generate + slider reveal + mark used)
-- `js/app.js` (config Supabase + helpers)
-- `js/admin.js`, `js/user.js`
-- `supabase.sql`
+## Files
+- index.html
+- admin.html (login email/password → OCR → import)
+- user.html (OTP login → claim → slider → mark used)
+- js/app.js (config + helpers)
+- js/admin.js, js/user.js
+- supabase_reusable.sql (tabel vouchers + RPC + RLS dasar)
+- supabase_users_patch.sql (profiles + trigger + RLS claim/use)
 
-Langkah cepat:
-1. Isi `SUPABASE_URL` dan `SUPABASE_ANON_KEY` pada `js/app.js`.
-2. Jalankan `supabase.sql` di SQL Editor Supabase.
-3. Deploy ke GitHub Pages (branch `main`, root). Tambahkan origin GitHub Pages di pengaturan CORS Supabase.
+## Setup
+1) Edit `js/app.js` → isi `SUPABASE_URL` & `SUPABASE_ANON_KEY`.
+2) Supabase SQL Editor: jalankan `supabase_reusable.sql` → lalu `supabase_users_patch.sql`.
+3) Authentication → Providers → Email: enable **Email** (OTP/Magic link).  
+   (Untuk admin import, buat user admin (email/password) di Authentication → Users → Add user.)
+4) Project Settings → API → **CORS origins**: tambahkan domain GitHub Pages kamu.
+5) Deploy ke GitHub Pages.
+
+## Catatan
+- FE `claim_code()` & `use_code()` otomatis memakai `auth.uid()` — user harus login.
+- Ganti policy insert menjadi hanya admin (email tertentu) jika perlu.

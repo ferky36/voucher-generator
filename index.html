@@ -16,7 +16,7 @@
     .card{background:var(--card);border:1px solid #232b3a;border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
     .row{display:flex;gap:12px;flex-wrap:wrap}
     label{display:block;margin:6px 0 6px;color:var(--muted)}
-    input[type=file],input[type=text],button,select{background:#0f131b;border:1px solid #263043;color:#e6edf5;padding:10px;border-radius:10px}
+    input[type=file],input[type=text],input[type=email],input[type=password],button{background:#0f131b;border:1px solid #263043;color:#e6edf5;padding:10px;border-radius:10px}
     button{cursor:pointer}
     button.primary{background:var(--accent);border-color:transparent;color:white}
     button.ghost{background:transparent}
@@ -38,17 +38,17 @@
 </head>
 <body>
   <header>
-    <h1>Voucher System — Supabase</h1>
+    <h1>Voucher System — Supabase (OTP + Admin)</h1>
     <span class="badge">Homepage</span>
   </header>
   <div class="container">
     <div class="card">
       <h2>Halaman</h2>
       <ul>
-        <li><a href="./admin.html">Admin</a> — Upload gambar → OCR → Import ke Supabase</li>
-        <li><a href="./user.html">User</a> — Generate voucher → Slide to reveal → Auto-mark used</li>
+        <li><a href="./admin.html">Admin</a> — Login (email/password) → OCR → Import ke Supabase</li>
+        <li><a href="./user.html">User</a> — Login/Daftar OTP → Generate → Slide to reveal → Auto mark used</li>
       </ul>
-      <p>Isi kredensial Supabase di <code>js/app.js</code> dan jalankan <code>supabase.sql</code> pada SQL Editor.</p>
+      <p>Isi kredensial Supabase di <code>js/app.js</code>, jalankan <code>supabase_reusable.sql</code> lalu <code>supabase_users_patch.sql</code> di SQL Editor.</p>
     </div>
   </div>
 </body>

@@ -17,7 +17,7 @@
     .card{background:var(--card);border:1px solid #232b3a;border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
     .row{display:flex;gap:12px;flex-wrap:wrap}
     label{display:block;margin:6px 0 6px;color:var(--muted)}
-    input[type=file],input[type=text],button,select{background:#0f131b;border:1px solid #263043;color:#e6edf5;padding:10px;border-radius:10px}
+    input[type=file],input[type=text],input[type=email],input[type=password],button{background:#0f131b;border:1px solid #263043;color:#e6edf5;padding:10px;border-radius:10px}
     button{cursor:pointer}
     button.primary{background:var(--accent);border-color:transparent;color:white}
     button.ghost{background:transparent}
@@ -43,6 +43,17 @@
     <a href="./admin.html" class="badge">← Ke halaman Admin</a>
   </header>
   <div class="container">
+    <div class="card" id="userAuthBox" style="margin-bottom:12px;background:#0f131b">
+      <h3 style="margin:0 0 8px">Login / Daftar (Email OTP)</h3>
+      <div class="row">
+        <input id="otpEmail" type="email" placeholder="email kamu" />
+        <button id="btnSendOtp" class="primary">Kirim Link OTP</button>
+        <button id="btnLogout" class="ghost">Logout</button>
+        <span id="otpStatus" class="badge hidden"></span>
+      </div>
+      <small class="badge">Cek email lalu klik link untuk kembali ke halaman ini.</small>
+    </div>
+
     <div class="card center">
       <button id="btnGenerate" class="primary" style="min-width:220px">Generate Voucher</button>
       <div id="genLoading" class="loading hidden">Sedang generate kode…</div>
