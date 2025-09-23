@@ -1,7 +1,11 @@
--- supabase_reusable.sql — base vouchers + RPC + RLS demo (idempotent)
+-- supabase_all_in_one.sql
+-- Jalankan SATU file ini di Supabase SQL Editor.
+-- Idempotent: aman dijalankan berulang.
 
+-- 0) EXTENSIONS
 create extension if not exists pgcrypto;
 
+-- 1) TABLES
 create table if not exists public.vouchers (
   id bigserial primary key,
   code text not null unique,
@@ -32,11 +36,78 @@ begin
   end if;
 end $$;
 
+-- Optional FKs to auth.users
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname='vouchers_claimed_by_fkey') then
+    alter table public.vouchers
+      add constraint vouchers_claimed_by_fkey
+      foreign key (claimed_by) references auth.users(id) on delete set null;
+  end if;
+  if not exists (select 1 from pg_constraint where conname='vouchers_used_by_fkey') then
+    alter table public.vouchers
+      add constraint vouchers_used_by_fkey
+      foreign key (used_by) references auth.users(id) on delete set null;
+  end if;
+end $$;
+
+-- PROFILES (optional but needed for admin gate)
+create table if not exists public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text,
+  display_name text,
+  role text not null default 'user',
+  created_at timestamptz not null default now()
+);
+alter table public.profiles enable row level security;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname='profiles self select' and schemaname='public' and tablename='profiles') then
+    create policy "profiles self select" on public.profiles
+      for select to authenticated using (auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname='profiles self upsert' and schemaname='public' and tablename='profiles') then
+    create policy "profiles self upsert" on public.profiles
+      for insert to authenticated with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname='profiles self update' and schemaname='public' and tablename='profiles') then
+    create policy "profiles self update" on public.profiles
+      for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles(user_id, email)
+  values (new.id, new.email)
+  on conflict (user_id) do update set email = excluded.email;
+  return new;
+end;
+$$;
+
+do $$
+begin
+  if not exists (select 1 from pg_trigger where tgname='on_auth_user_created') then
+    create trigger on_auth_user_created
+    after insert on auth.users
+    for each row execute function public.handle_new_user();
+  end if;
+end $$;
+
+-- 2) INDEXES
 create index if not exists idx_vouchers_status on public.vouchers (status);
 create index if not exists idx_vouchers_new_fifo on public.vouchers (id) where status = 'new';
 create index if not exists idx_vouchers_claimed_by on public.vouchers (claimed_by) where status in ('claimed','used');
 create index if not exists idx_vouchers_used_by on public.vouchers (used_by) where status = 'used';
 
+-- 3) TRIGGER FN
 create or replace function public.vouchers_autotimestamps()
 returns trigger language plpgsql as $$
 begin
@@ -54,6 +125,44 @@ create trigger trg_vouchers_autotimestamps
 before update on public.vouchers
 for each row execute function public.vouchers_autotimestamps();
 
+-- 4) RLS POLICIES
+alter table public.vouchers enable row level security;
+
+do $$ begin
+  -- replace any prior demo policy
+  if exists (select 1 from pg_policies where policyname='read all' and schemaname='public' and tablename='vouchers') then
+    drop policy "read all" on public.vouchers;
+  end if;
+  if not exists (select 1 from pg_policies where policyname='read all any' and schemaname='public' and tablename='vouchers') then
+    create policy "read all any" on public.vouchers for select to public using (true);
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname='import by auth' and schemaname='public' and tablename='vouchers') then
+    create policy "import by auth" on public.vouchers for insert to authenticated with check (true);
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname='claim by self' and schemaname='public' and tablename='vouchers') then
+    create policy "claim by self" on public.vouchers
+      for update to authenticated
+      using (status = 'new')
+      with check (status = 'claimed' and claimed_by = auth.uid());
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where policyname='use by owner' and schemaname='public' and tablename='vouchers') then
+    create policy "use by owner" on public.vouchers
+      for update to authenticated
+      using (claimed_by = auth.uid())
+      with check (claimed_by = auth.uid() and status in ('claimed','used'));
+  end if;
+end $$;
+
+-- 5) RPCs
 create or replace function public.claim_code(p_user uuid default null, p_fifo boolean default true)
 returns table(id bigint, code text, validity_days integer, valid_until timestamptz)
 language plpgsql
@@ -74,7 +183,6 @@ begin
      set status='claimed', claimed_by=coalesce(p_user, auth.uid()), claimed_at=now()
    where v.id = r.id;
 
-  -- isi kolom return
   id := r.id;
   code := r.code;
   validity_days := r.validity_days;
@@ -85,36 +193,11 @@ end $$;
 create or replace function public.use_code(p_id bigint, p_user uuid default null)
 returns void language plpgsql as $$
 begin
-  update public.vouchers
+  update public.vouchers v
      set status='used', used_by=coalesce(p_user, auth.uid()), used_at=now()
-   where id=p_id and status in ('new','claimed');
+   where v.id=p_id and v.status in ('new','claimed');
 end $$;
 
-alter table public.vouchers enable row level security;
-
--- Pastikan SELECT juga diizinkan untuk role authenticated (bukan hanya anon)
-do $$ begin
-  if exists (
-    select 1 from pg_policies where policyname='read all' and schemaname='public' and tablename='vouchers'
-  ) then
-    drop policy "read all" on public.vouchers;
-  end if;
-  if not exists (
-    select 1 from pg_policies where policyname='read all any' and schemaname='public' and tablename='vouchers'
-  ) then
-    create policy "read all any" on public.vouchers for select to public using (true);
-  end if;
-end $$;
-
-do $$ begin
-  if not exists (select 1 from pg_policies where policyname='import by auth' and schemaname='public' and tablename='vouchers') then
-    create policy "import by auth" on public.vouchers for insert to authenticated with check (true);
-  end if;
-end $$;
-
--- RPC: secure bulk import (bypass RLS safely)
--- Hanya dapat dieksekusi oleh user terautentikasi. Jika tabel profiles
--- ada dan role bukan admin/superadmin, akan ditolak.
 create or replace function public.import_vouchers(p_codes text[])
 returns json
 language plpgsql
@@ -131,7 +214,6 @@ begin
     raise exception 'Unauthenticated' using errcode = '42501';
   end if;
 
-  -- Opsional: hanya admin
   if exists (
     select 1 from information_schema.tables where table_schema='public' and table_name='profiles'
   ) then
@@ -157,8 +239,6 @@ begin
   )
   select count(*) into inserted from ins;
 
-  -- CTE di atas hanya berlaku untuk statement sebelumnya,
-  -- jadi hitung ulang invalid tanpa mereferensikan CTE "src".
   select count(*) into invalid
   from (
     select distinct trim(c) as code
@@ -176,7 +256,7 @@ end $$;
 revoke all on function public.import_vouchers(text[]) from public;
 grant execute on function public.import_vouchers(text[]) to authenticated;
 
--- RPC baru: import dengan items JSON (code + validity_days)
+-- New: JSON items import (code + validity_days)
 create or replace function public.import_vouchers_items(p_items jsonb)
 returns json
 language plpgsql
@@ -245,3 +325,40 @@ end $$;
 
 revoke all on function public.import_vouchers_items(jsonb) from public;
 grant execute on function public.import_vouchers_items(jsonb) to authenticated;
+
+-- Diagnostics helper
+create or replace function public.rls_diag()
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  u uuid := auth.uid();
+  rls json;
+  role_setting text;
+begin
+  select current_setting('role', true) into role_setting;
+
+  select json_agg(json_build_object(
+    'policyname', policyname,
+    'cmd', cmd,
+    'roles', roles,
+    'qual', qual,
+    'with_check', with_check
+  )) into rls
+  from pg_policies
+  where schemaname = 'public' and tablename = 'vouchers';
+
+  return json_build_object(
+    'uid', u,
+    'role_setting', role_setting,
+    'policies', coalesce(rls, '[]'::json)
+  );
+end $$;
+
+revoke all on function public.rls_diag() from public;
+grant execute on function public.rls_diag() to authenticated;
+grant execute on function public.rls_diag() to anon;
+
+-- END
