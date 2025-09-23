@@ -41,6 +41,10 @@
     .authed-only { visibility: hidden; }
     .auth .authed-only { visibility: visible; }
 
+  
+    .inputWrap{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+    .domainTag{display:inline-flex;align-items:center;border:1px solid #263043;background:#0f131b;color:#9aa7b2;border-radius:10px;padding:10px 12px;white-space:nowrap}
+    @media (max-width:520px){ .inputWrap{flex-wrap:wrap} }
   </style>
 
 </head>
@@ -51,12 +55,15 @@
   <div class="container">
     <div class="card auth-only" id="userAuthBox" style="margin-bottom:12px;background:#0f131b">
       <h3 style="margin:0 0 8px">Login / Daftar (Email OTP)</h3>
-      <div class="row">
-        <input id="otpEmail" type="email" placeholder="email kamu" />
-        <button id="btnSendOtp" class="primary">Kirim Link OTP</button>
-        <button id="btnLogout" class="ghost authed-only">Logout</button>
-        <span id="otpStatus" class="badge hidden"></span>
-      </div>
+        <div class="row">
+          <div class="inputWrap">
+            <input id="otpLocal" type="text" placeholder="username saja (mis. tester)" />
+            <span class="domainTag">@dataon.com</span>
+          </div>
+          <button id="btnSendOtp" class="primary">Kirim Link OTP</button>
+          <button id="btnLogout" class="ghost authed-only">Logout</button>
+          <span id="otpStatus" class="badge hidden"></span>
+        </div>
       <small class="badge">Cek email lalu klik link untuk kembali ke halaman ini.</small>
     </div>
 

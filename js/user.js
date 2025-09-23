@@ -3,7 +3,7 @@ import { supabase, $, sleep, setHidden, toastBadge } from './app.js';
 
 // OTP login
 const userAuthBox = $('#userAuthBox');
-const otpEmail = $('#otpEmail');
+const otpLocal = $('#otpLocal');
 const btnSendOtp = $('#btnSendOtp');
 const btnLogout = $('#btnLogout');
 const otpStatus = $('#otpStatus');
@@ -28,11 +28,20 @@ supabase.auth.onAuthStateChange((_evt, session)=>{
 });
 
 btnSendOtp?.addEventListener('click', async ()=>{
-  if (!otpEmail.value) { toastBadge(otpStatus, 'Isi email dulu', 'warn'); return; }
+  const raw = (otpLocal?.value || '').trim();
+  if (!raw) { toastBadge(otpStatus, 'Isi username dulu', 'warn'); return; }
+  if (raw.includes('@') || /\s/.test(raw)) { toastBadge(otpStatus, 'Masukkan username saja tanpa @', 'warn'); return; }
+  if (!/^[A-Za-z0-9._-]+$/.test(raw)) { toastBadge(otpStatus, 'Karakter username tidak valid', 'warn'); return; }
+  const email = raw + '@dataon.com';
+  if (!email.toLowerCase().endsWith('@dataon.com')) { toastBadge(otpStatus, 'Domain harus @dataon.com', 'warn'); return; }
+
   const { error } = await supabase.auth.signInWithOtp({
-    email: otpEmail.value,
+    email: email,
     options: { emailRedirectTo: window.location.href }
   });
+  if (error) toastBadge(otpStatus, error.message, 'warn');
+  else toastBadge(otpStatus, 'Link OTP dikirim ke '+email+'. Cek email kamu.');
+});
   if (error) toastBadge(otpStatus, error.message, 'warn');
   else toastBadge(otpStatus, 'Link OTP dikirim. Cek email kamu.');
 });
