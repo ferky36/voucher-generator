@@ -71,3 +71,23 @@ $('#btnImport').onclick = async () => {
   }
   toastBadge($('#importStatus'), 'Import berhasil');
 };
+
+// RLS Diagnose (lists vouchers policies and current uid)
+const btnRlsDiag = $('#btnRlsDiag');
+const diagOut = $('#diagOut');
+btnRlsDiag?.addEventListener('click', async () => {
+  if (diagOut) diagOut.classList.remove('hidden');
+  if (diagOut) diagOut.textContent = 'Memeriksa RLS…';
+
+  const { data, error } = await supabase.rpc('rls_diag');
+  if (error) {
+    const msg = [
+      'Gagal memanggil RPC rls_diag.',
+      `${error.code || ''} ${error.message}`.trim(),
+      'Jalankan SQL file: supabase_diag.sql di SQL Editor, lalu coba lagi.'
+    ].join('\n');
+    if (diagOut) diagOut.textContent = msg;
+    return;
+  }
+  if (diagOut) diagOut.textContent = JSON.stringify(data, null, 2);
+});
