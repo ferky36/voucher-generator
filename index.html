@@ -34,6 +34,13 @@
     .loading{display:inline-flex;gap:8px;align-items:center}
     .loading:before{content:"";width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
+    /* --- AUTH GATING --- */
+    .auth .auth-only { display: none !important; }
+    .unauth .authed-only { display: none !important; }
+    /* optional: cegah FOUC saat load */
+    .authed-only { visibility: hidden; }
+    .auth .authed-only { visibility: visible; }
+
   </style>
 
 </head>
