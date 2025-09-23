@@ -21,12 +21,14 @@ try { setHidden(genLoading, true); } catch(e) {}
 })();
 
 updateEligibility();
+paintSlider(revealSlider);
 
 supabase.auth.onAuthStateChange((_evt, session)=>{
   document.body.classList.toggle('auth', !!session);
   document.body.classList.toggle('unauth', !session);
   try { setHidden(genLoading, true); } catch(e) {}
   // updateEligibility();
+  paintSlider(revealSlider);
   if (session) userAuthBox?.classList.add('hidden');
   else userAuthBox?.classList.remove('hidden');
 });
@@ -72,6 +74,16 @@ const genLoading = $('#genLoading');
 setHidden(genLoading, true);
 const claimWrap = $('#claimWrap');
 const revealSlider = $('#revealSlider');
+// Warnai progress slider
+function paintSlider(slider){
+  if (!slider) return;
+  const val = Number(slider.value||0);
+  const pct = Math.max(0, Math.min(100, val));
+  const active = '#3b82f6'; // biru
+  const bg = '#2b3440';
+  slider.style.background = `linear-gradient(to right, ${active} 0%, ${active} ${pct}%, ${bg} ${pct}%, ${bg} 100%)`;
+}
+
 const voucherShow = $('#voucherShow');
 const voucherCodeEl = $('#voucherCode');
 const btnCopy = $('#btnCopy');
@@ -137,6 +149,7 @@ function showClaimUI(row){
 
 let claimed = null;
 let usedMarked = false;
+let revealed = false;
 
 btnGenerate.onclick = async () => {
   // Tampilkan loading hanya saat diproses
@@ -169,6 +182,7 @@ btnGenerate.onclick = async () => {
       }
       setHidden(btnGenerate,false);
       updateEligibility();
+      paintSlider(revealSlider);
       return;
     }
     if (!data || !data.length){ alert('Stok voucher habis'); setHidden(btnGenerate,false); return; }
