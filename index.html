@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Voucher System – Home</title>
+  <title>Voucher System – User</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
   
   <style>
     :root{--accent:#2f80ed;--ok:#10b981;--warn:#f59e0b;--bg:#0b0d12;--card:#121722;--text:#e6edf5;--muted:#9aa7b2;}
@@ -36,20 +37,45 @@
   </style>
 
 </head>
-<body>
+<body class="unauth">
   <header>
-    <h1>Voucher System — Supabase (OTP + Admin)</h1>
-    <span class="badge">Homepage</span>
+    <h1>Voucher User — Generate & Slide</h1>
   </header>
   <div class="container">
-    <div class="card">
-      <h2>Halaman</h2>
-      <ul>
-        <li><a href="./admin.html">Admin</a> — Login (email/password) → OCR → Import ke Supabase</li>
-        <li><a href="./user.html">User</a> — Login/Daftar OTP → Generate → Slide to reveal → Auto mark used</li>
-      </ul>
-      <p>Isi kredensial Supabase di <code>js/app.js</code>, jalankan <code>supabase_reusable.sql</code> lalu <code>supabase_users_patch.sql</code> di SQL Editor.</p>
+    <div class="card auth-only" id="userAuthBox" style="margin-bottom:12px;background:#0f131b">
+      <h3 style="margin:0 0 8px">Login / Daftar (Email OTP)</h3>
+      <div class="row">
+        <input id="otpEmail" type="email" placeholder="email kamu" />
+        <button id="btnSendOtp" class="primary">Kirim Link OTP</button>
+        <button id="btnLogout" class="ghost">Logout</button>
+        <span id="otpStatus" class="badge hidden"></span>
+      </div>
+      <small class="badge">Cek email lalu klik link untuk kembali ke halaman ini.</small>
+    </div>
+
+    <div class="card center authed-only">
+      <button id="btnGenerate" class="primary" style="min-width:220px">Generate Voucher</button>
+      <div id="genLoading" class="loading hidden">Sedang generate kode…</div>
+
+      <div id="claimWrap" class="hidden" style="width:100%">
+        <p class="badge warn">Geser slider sampai penuh untuk <strong>menampilkan</strong> dan <strong>menggunakan</strong> voucher.</p>
+        <div class="sliderWrap">
+          <input id="revealSlider" type="range" value="0" min="0" max="100" />
+          <div class="row" style="justify-content:space-between;color:#9aa7b2">
+            <span>Geser ▶</span>
+            <span>100%</span>
+          </div>
+        </div>
+        <div id="voucherShow" class="card hidden center" style="margin-top:12px;background:#0f131b">
+          <div class="badge success">Voucher Anda</div>
+          <div id="voucherCode" class="big codes">•••••-•••••</div>
+          <button id="btnCopy" class="ghost">Copy</button>
+        </div>
+      </div>
     </div>
   </div>
+
+  <script type="module" src="./js/app.js"></script>
+  <script type="module" src="./js/user.js"></script>
 </body>
 </html>

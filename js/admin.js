@@ -12,6 +12,9 @@ const authStatus = $('#authStatus');
 (async ()=>{
   const { data:{ session } } = await supabase.auth.getSession();
   if (session) authBox?.classList.add('hidden');
+  document.body.classList.toggle('auth', !!session);
+  document.body.classList.toggle('unauth', !session);
+
 })();
 
 btnLogin?.addEventListener('click', async ()=>{
@@ -19,12 +22,20 @@ btnLogin?.addEventListener('click', async ()=>{
     email: email.value, password: password.value
   });
   if (error) toastBadge(authStatus, error.message, 'warn');
-  else { toastBadge(authStatus, 'Login sukses'); authBox?.classList.add('hidden'); }
+  else {
+    toastBadge(authStatus, 'Login sukses');
+    authBox?.classList.add('hidden');
+    document.body.classList.add('auth');
+    document.body.classList.remove('unauth');
+  }
+
 });
 
 btnLogoutAdmin?.addEventListener('click', async ()=>{
   await supabase.auth.signOut();
   authBox?.classList.remove('hidden');
+  document.body.classList.remove('auth');
+  document.body.classList.add('unauth');
   toastBadge(authStatus, 'Logged out');
 });
 

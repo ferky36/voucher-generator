@@ -11,9 +11,13 @@ const otpStatus = $('#otpStatus');
 (async ()=>{
   const { data:{ session } } = await supabase.auth.getSession();
   if (session) userAuthBox?.classList.add('hidden');
+  document.body.classList.toggle('auth', !!session);
+  document.body.classList.toggle('unauth', !session);
 })();
 
 supabase.auth.onAuthStateChange((_evt, session)=>{
+  document.body.classList.toggle('auth', !!session);
+  document.body.classList.toggle('unauth', !session);
   if (session) userAuthBox?.classList.add('hidden');
   else userAuthBox?.classList.remove('hidden');
 });
@@ -31,6 +35,8 @@ btnSendOtp?.addEventListener('click', async ()=>{
 btnLogout?.addEventListener('click', async ()=>{
   await supabase.auth.signOut();
   userAuthBox?.classList.remove('hidden');
+  document.body.classList.remove('auth');
+  document.body.classList.add('unauth');
   toastBadge(otpStatus, 'Logged out');
 });
 
