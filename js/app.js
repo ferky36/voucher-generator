@@ -9,4 +9,4 @@ export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON
 export const $ = (s)=>document.querySelector(s);
 export const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
 export function setHidden(el, bool){ el.classList.toggle('hidden', !!bool); }
-export function toastBadge(el, text, cls="success"){ el.textContent=text; el.className = `badge ${cls}`; setHidden(el,false); setTimeout(()=>setHidden(el,true),3500); }
+export function toastBadge(el, text, cls="success"){ el.textContent=text; el.className = `badge ${cls}`; setHidden(el,false); setTimeout(()=>setHidden(el,true),5000); }
