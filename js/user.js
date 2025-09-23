@@ -196,7 +196,7 @@ revealSlider.addEventListener('input', async (e)=>{
       // btnGenerate tetap bisa diklik; hanya slider yang dikunci
     }
   }
-});
+);
 
 btnCopy.onclick = async ()=>{
   try{
