@@ -45,25 +45,54 @@ const ocrOut = $('#ocrOut');
 let ocrCodes = [];
 let batchValidityDays = null;
 // --- PDF support (loaded on-demand) ---
+// --- PDF.js loader dengan fallback CDN ---
 let _pdfReady = null;
-async function ensurePdfJs(){
+async function ensurePdfJs() {
   if (window.pdfjsLib) return window.pdfjsLib;
-  if (!_pdfReady){
-    _pdfReady = new Promise((resolve, reject)=>{
+  if (_pdfReady) return _pdfReady;
+
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
       const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js';
-      s.onload = ()=>{
-        try {
-          window.pdfjsLib.GlobalWorkerOptions.workerSrc = ('https://' + 'cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js');
-        } catch {}
-        resolve(window.pdfjsLib);
-      };
-      s.onerror = ()=>reject(new Error('Gagal memuat PDF.js'));
+      s.src = src;
+      s.crossOrigin = 'anonymous';
+      s.referrerPolicy = 'no-referrer';
+      s.onload = () => resolve(src);
+      s.onerror = () => reject(new Error('load-fail:'+src));
       document.head.appendChild(s);
     });
   }
+
+  const candidates = [
+    // paling stabil untuk UMD
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js',
+    'https://unpkg.com/pdfjs-dist@4.2.67/build/pdf.min.js'
+  ];
+
+  _pdfReady = (async () => {
+    let picked = null;
+    for (const u of candidates){
+      try { picked = await loadScript(u); break; } catch(_) { /* coba kandidat berikutnya */ }
+    }
+    if (!picked) throw new Error('Gagal memuat PDF.js');
+
+    // ambil base path utk worker
+    const base = picked.slice(0, picked.lastIndexOf('/')+1);
+
+    // UMD global bisa muncul dengan nama berbeda
+    const lib = window.pdfjsLib || window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+    if (!lib) throw new Error('PDF.js tidak tersedia di window');
+
+    try { lib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js'; } catch {}
+
+    window.pdfjsLib = lib; // standarisasi
+    return lib;
+  })();
+
   return _pdfReady;
 }
+
 async function extractPdfText(file){
   const pdfjsLib = await ensurePdfJs();
   const buf = await file.arrayBuffer();
