@@ -51,46 +51,38 @@ async function ensurePdfJs() {
   if (window.pdfjsLib) return window.pdfjsLib;
   if (_pdfReady) return _pdfReady;
 
-  function loadScript(src){
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = src;
-      s.crossOrigin = 'anonymous';
-      s.referrerPolicy = 'no-referrer';
-      s.onload = () => resolve(src);
-      s.onerror = () => reject(new Error('load-fail:'+src));
-      document.head.appendChild(s);
-    });
+  // base lokal: ../vendor/pdfjs/ relatif terhadap file ini (js/admin.js)
+  const baseUrl = new URL('../vendor/pdfjs/', import.meta.url).href;
+
+  // 1) Coba ESM (mjs) lokal
+  try {
+    const mod = await import(/* @vite-ignore */ baseUrl + 'pdf.min.mjs');
+    const lib = mod?.default?.GlobalWorkerOptions ? mod.default : mod;
+    try { lib.GlobalWorkerOptions.workerSrc = baseUrl + 'pdf.worker.min.mjs'; } catch {}
+    if ('disableWorker' in lib) lib.disableWorker = false;
+    window.pdfjsLib = lib;
+    _pdfReady = lib;
+    return lib;
+  } catch (e) {
+    // fallback ke UMD lokal jika tersedia
   }
 
-  const candidates = [
-    // paling stabil untuk UMD
-    'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.2.67/build/pdf.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js',
-    'https://unpkg.com/pdfjs-dist@4.2.67/build/pdf.min.js'
-  ];
+  // 2) Fallback UMD (opsional) kalau kamu ikut menaruh .js
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = baseUrl + 'pdf.min.js';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  }).catch(() => {});
 
-  _pdfReady = (async () => {
-    let picked = null;
-    for (const u of candidates){
-      try { picked = await loadScript(u); break; } catch(_) { /* coba kandidat berikutnya */ }
-    }
-    if (!picked) throw new Error('Gagal memuat PDF.js');
+  if (window.pdfjsLib) {
+    try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = baseUrl + 'pdf.worker.min.js'; } catch {}
+    if ('disableWorker' in window.pdfjsLib) window.pdfjsLib.disableWorker = false;
+    return (window.pdfjsLib);
+  }
 
-    // ambil base path utk worker
-    const base = picked.slice(0, picked.lastIndexOf('/')+1);
-
-    // UMD global bisa muncul dengan nama berbeda
-    const lib = window.pdfjsLib || window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
-    if (!lib) throw new Error('PDF.js tidak tersedia di window');
-
-    try { lib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.js'; } catch {}
-
-    window.pdfjsLib = lib; // standarisasi
-    return lib;
-  })();
-
-  return _pdfReady;
+  throw new Error('PDF.js lokal tidak ditemukan. Pastikan file ada di /vendor/pdfjs/');
 }
 
 async function extractPdfText(file){
