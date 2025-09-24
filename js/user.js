@@ -110,6 +110,7 @@ async function updateEligibility(){
       toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
       const active = await fetchActiveClaim();
       if (active) showClaimUI(active);
+      setHidden(btnGenerate,true);
     }
   }catch(e){ /* ignore */ }
 }
