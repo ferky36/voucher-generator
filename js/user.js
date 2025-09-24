@@ -106,6 +106,8 @@ async function updateEligibility(){
     } else if (row.reason === 'COOLDOWN'){
       const left = formatRemaining(row.remaining_seconds);
       toastBadge(getStatusEl(), 'Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam '+left, 'warn');
+      const last = await fetchLastUsedVoucher();
+      if (last) showUsedVoucher(last);
     } else if (row.reason === 'HAS_ACTIVE_CLAIM'){
       toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
       const active = await fetchActiveClaim();
@@ -170,6 +172,8 @@ btnGenerate.onclick = async () => {
         const sec = parseInt(msg.split(':')[2]||'0',10)||0;
         const hours = Math.floor(sec/3600), minutes = Math.floor((sec%3600)/60);
         toastBadge(getStatusEl(), `Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam ${hours} jam ${minutes} menit.`, 'warn');
+        const last = await fetchLastUsedVoucher();
+        if (last) showUsedVoucher(last);
       } else if (msg.startsWith('NOT_ELIGIBLE:HAS_ACTIVE_CLAIM')){
         const row = await fetchActiveClaim();
         if (row) { showClaimUI(row); toastBadge(getStatusEl(), 'Voucher kamu sudah tersedia. Geser slider untuk memunculkannya.', 'warn'); }
@@ -204,7 +208,7 @@ revealSlider.addEventListener('input', async (e)=>{
     setHidden(voucherShow,false);
 
     // Tandai used via RPC
-    // RPC dipindah ke btnCopy; tidak update used_at di slider
+    try { if (!usedMarked && claimed) { await supabase.rpc('use_code', { p_id: claimed.id }); usedMarked = true; } } catch(_) {}
       revealSlider.disabled = true;
       // btnGenerate tetap bisa diklik; hanya slider yang dikunci
     }
@@ -215,10 +219,6 @@ btnCopy.onclick = async ()=>{
   try{
     await navigator.clipboard.writeText(voucherCodeEl.textContent.trim());
     btnCopy.textContent='Tersalin ✔';
-    // Update used_at/used_by sekali saja saat tombol Copy diklik
-    if (!usedMarked && claimed) {
-      try { await supabase.rpc('use_code', { p_id: claimed.id }); usedMarked = true; } catch(_) { /* abaikan */ }
-    }
   }catch{
     btnCopy.textContent='Gagal copy';
   }
@@ -229,4 +229,32 @@ btnCopy.onclick = async ()=>{
 function getStatusEl(){
   const isAuth = document.body.classList.contains('auth');
   return isAuth && genStatus ? genStatus : otpStatus;
+}
+
+
+// Ambil voucher terakhir yang sudah digunakan (untuk COOLDOWN)
+async function fetchLastUsedVoucher(){
+  try{
+    const { data:{ user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from('vouchers')
+      .select('id, code, used_at')
+      .eq('used_by', user.id)
+      .not('used_at', 'is', null)
+      .order('used_at', { ascending:false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return data || null;
+  }catch(_){ return null; }
+}
+
+function showUsedVoucher(row){
+  if (!row) return;
+  try { voucherCodeEl.textContent = row.code; } catch {}
+  setHidden(voucherShow, false);
+  setHidden(claimWrap, true);
+  try { revealSlider.disabled = true; } catch {}
+  try { setHidden(btnGenerate, true); } catch {}
 }
