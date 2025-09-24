@@ -44,6 +44,39 @@ const imgInput = $('#imgFiles');
 const ocrOut = $('#ocrOut');
 let ocrCodes = [];
 let batchValidityDays = null;
+// --- PDF support (loaded on-demand) ---
+let _pdfReady = null;
+async function ensurePdfJs(){
+  if (window.pdfjsLib) return window.pdfjsLib;
+  if (!_pdfReady){
+    _pdfReady = new Promise((resolve, reject)=>{
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js';
+      s.onload = ()=>{
+        try {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = ('https://' + 'cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js');
+        } catch {}
+        resolve(window.pdfjsLib);
+      };
+      s.onerror = ()=>reject(new Error('Gagal memuat PDF.js'));
+      document.head.appendChild(s);
+    });
+  }
+  return _pdfReady;
+}
+async function extractPdfText(file){
+  const pdfjsLib = await ensurePdfJs();
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let out='';
+  for (let p=1; p<=pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    out += content.items.map(it=>it.str).join(' ') + '\n';
+  }
+  return out;
+}
+
 
 $('#btnClear').onclick = ()=>{ ocrCodes=[]; batchValidityDays=null; ocrOut.textContent='—'; };
 
@@ -52,21 +85,32 @@ $('#btnOcr').onclick = async () => {
 
   const Tesseract = (await import('https://cdn.skypack.dev/tesseract.js@5.0.3')).default;
   const files = [...imgInput.files];
-  if (!files.length) { ocrOut.textContent = 'Pilih gambar dulu'; return; }
+  if (!files.length) { ocrOut.textContent = 'Pilih file dulu'; return; }
 
   const found = new Set();
+  let anyValidDays = null;
   for (const f of files){
-    const { data:{ text } } = await Tesseract.recognize(f, 'eng');
+    let text = '';
+    const name = (f.name||'').toLowerCase();
+    if (f.type === 'application/pdf' || name.endsWith('.pdf')){
+      text = await extractPdfText(f);
+    } else if (f.type === 'text/plain' || name.endsWith('.txt')){
+      text = await f.text();
+    } else {
+      const { data:{ text: t } } = await Tesseract.recognize(f, 'eng');
+      text = t || '';
+    }
     const mValid = /Valid\s*for\s*(\d+)\s*Days/i.exec(text);
-  batchValidityDays = mValid ? Math.max(1, Math.min(365, parseInt(mValid[1],10))) : null;
-  const codes = (text.match(/\b\d{5}-\d{5}\b/g) || []);
+    if (mValid) anyValidDays = Math.max(1, Math.min(365, parseInt(mValid[1],10)));
+    const codes = (text.match(/\b\d{5}-\d{5}\b/g) || []);
     codes.forEach(c=>found.add(c));
   }
 
   ocrCodes = [...found];
+  batchValidityDays = anyValidDays;
   ocrOut.textContent = ocrCodes.length
     ? `${ocrCodes.length} kode terdeteksi (unik)\n` + ocrCodes.join('\n')
-    + (batchValidityDays ? `\n(validity_days=${batchValidityDays})` : '')
+      + (batchValidityDays ? `\n(validity_days=${batchValidityDays})` : '')
     : 'Tidak ada kode terdeteksi.';
 };
 
