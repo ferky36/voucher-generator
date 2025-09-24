@@ -136,6 +136,21 @@ $('#btnOcr').onclick = async () => {
 };
 
 $('#btnImport').onclick = async () => {
+  // Optional: wipe all vouchers before importing
+  if (chkReset?.checked) {
+    const ok = confirm('Yakin hapus semua voucher sebelum import data baru?');
+    if (!ok) return;
+    toastBadge(importStatus, 'Menghapus semua voucher…');
+    try {
+      const { error: wipeErr } = await supabase.rpc('wipe_vouchers');
+      if (wipeErr) { toastBadge(importStatus, 'Gagal hapus: ' + wipeErr.message, 'warn'); return; }
+      toastBadge(importStatus, 'Semua voucher dihapus. Melanjutkan import…');
+    } catch (e) {
+      toastBadge(importStatus, e.message || 'Gagal hapus', 'warn');
+      return;
+    }
+  }
+
   const { data:{ session } } = await supabase.auth.getSession();
   if (!session){ alert('Harus login dulu sebagai admin.'); return; }
 
