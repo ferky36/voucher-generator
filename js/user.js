@@ -252,9 +252,13 @@ async function fetchLastUsedVoucher(){
 
 function showUsedVoucher(row){
   if (!row) return;
-  try { voucherCodeEl.textContent = row.code; } catch {}
-  setHidden(voucherShow, false);
-  setHidden(claimWrap, true);
-  try { revealSlider.disabled = true; } catch {}
-  try { setHidden(btnGenerate, true); } catch {}
+  voucherCodeEl.textContent = row.code;       // tampilkan kode
+  setHidden(claimWrap, false);                 // JANGAN sembunyikan parent
+  setHidden(voucherShow, false);               // tampilkan kartu voucher
+  if (revealSlider){
+    revealSlider.value = 100;                  // kunci di 100%
+    revealSlider.disabled = true;
+    if (typeof paintSlider === 'function') paintSlider(revealSlider);
+  }
+  setHidden(btnGenerate, true);                // sembunyikan tombol generate
 }
