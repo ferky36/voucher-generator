@@ -13,6 +13,7 @@ const genLoading = $('#genLoading');
 try { setHidden(genLoading, true); } catch(e) {}
 const claimWrap = $('#claimWrap');
 const revealSlider = $('#revealSlider');
+const sliderWrap = $('#sliderWrap');
 
 // Pastikan loading tersembunyi saat awal muat
 
@@ -253,7 +254,8 @@ async function fetchLastUsedVoucher(){
 function showUsedVoucher(row){
   if (!row) return;
   voucherCodeEl.textContent = row.code;       // tampilkan kode
-  setHidden(claimWrap, false);                 // JANGAN sembunyikan parent
+  setHidden(claimWrap, false);
+  if (sliderWrap) setHidden(sliderWrap, true);                 // JANGAN sembunyikan parent
   setHidden(voucherShow, false);               // tampilkan kartu voucher
   if (revealSlider){
     revealSlider.value = 100;                  // kunci di 100%
