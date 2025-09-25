@@ -7,6 +7,7 @@ const email = $('#email');
 const password = $('#password');
 const btnLogin = $('#btnLogin');
 const btnLogoutAdmin = $('#btnLogoutAdmin');
+const btnLogoutAdminHeader = $('#btnLogoutAdminHeader');
 const authStatus = $('#authStatus');
 
 (async ()=>{
@@ -33,13 +34,16 @@ btnLogin?.addEventListener('click', async ()=>{
 
 });
 
-btnLogoutAdmin?.addEventListener('click', async ()=>{
+const doAdminLogout = async ()=>{
   await supabase.auth.signOut();
   authBox?.classList.remove('hidden');
   document.body.classList.remove('auth');
   document.body.classList.add('unauth');
   toastBadge(authStatus, 'Logged out');
-});
+};
+
+btnLogoutAdmin?.addEventListener('click', doAdminLogout);
+btnLogoutAdminHeader?.addEventListener('click', doAdminLogout);
 
 // OCR + Import
 const imgInput = $('#imgFiles');
@@ -87,6 +91,53 @@ async function ensurePdfJs() {
   throw new Error('PDF.js lokal tidak ditemukan. Pastikan file ada di /vendor/pdfjs/');
 }
 
+// --- Tesseract.js loader: prefer self-hosted in /vendor/tesseract/ with fallback CDN ---
+let _tessReady = null;
+async function ensureTesseract() {
+  if (window.Tesseract) return { Tesseract: window.Tesseract, opts: null };
+  if (_tessReady) return _tessReady;
+
+  const baseUrl = new URL('../vendor/tesseract/', import.meta.url).href;
+  // Try ESM/UMD local file
+  try {
+    const mod = await import(/* @vite-ignore */ baseUrl + 'tesseract.min.js');
+    const Tesseract = mod?.default || mod;
+    window.Tesseract = Tesseract;
+    const opts = {
+      workerPath: baseUrl + 'worker.min.js',
+      corePath: baseUrl + 'tesseract-core-simd.wasm',
+      langPath: baseUrl + 'lang/'
+    };
+    _tessReady = { Tesseract, opts };
+    return _tessReady;
+  } catch (_) { /* fallthrough */ }
+
+  // Fallback: inject UMD from local if different name
+  try {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = baseUrl + 'tesseract.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    if (window.Tesseract) {
+      const opts = {
+        workerPath: baseUrl + 'worker.min.js',
+        corePath: baseUrl + 'tesseract-core-simd.wasm',
+        langPath: baseUrl + 'lang/'
+      };
+      _tessReady = { Tesseract: window.Tesseract, opts };
+      return _tessReady;
+    }
+  } catch (_) { /* ignore */ }
+
+  // Last fallback: CDN (Skypack ESM), will use its own defaults pointing to jsDelivr
+  const mod = (await import('https://cdn.skypack.dev/tesseract.js@5.0.3')).default;
+  _tessReady = { Tesseract: mod, opts: null };
+  return _tessReady;
+}
+
 async function extractPdfText(file){
   const pdfjsLib = await ensurePdfJs();
   const buf = await file.arrayBuffer();
@@ -106,7 +157,7 @@ $('#btnClear').onclick = ()=>{ ocrCodes=[]; batchValidityDays=null; ocrOut.textC
 $('#btnOcr').onclick = async () => {
   ocrOut.textContent = 'Proses OCR...';
 
-  const Tesseract = (await import('https://cdn.skypack.dev/tesseract.js@5.0.3')).default;
+  const { Tesseract, opts } = await ensureTesseract();
   const files = [...imgInput.files];
   if (!files.length) { ocrOut.textContent = 'Pilih file dulu'; return; }
 
@@ -120,8 +171,19 @@ $('#btnOcr').onclick = async () => {
     } else if (f.type === 'text/plain' || name.endsWith('.txt')){
       text = await f.text();
     } else {
-      const { data:{ text: t } } = await Tesseract.recognize(f, 'eng');
-      text = t || '';
+      try {
+        const { data:{ text: t } } = await Tesseract.recognize(f, 'eng', opts || {});
+        text = t || '';
+      } catch (e) {
+        // As a safety net: try CDN defaults if self-hosted assets incomplete
+        try {
+          const cdn = (await import('https://cdn.skypack.dev/tesseract.js@5.0.3')).default;
+          const { data:{ text: t } } = await cdn.recognize(f, 'eng');
+          text = t || '';
+        } catch (ee) {
+          throw e;
+        }
+      }
     }
     const mValid = /Valid\s*for\s*(\d+)\s*Days/i.exec(text);
     if (mValid) anyValidDays = Math.max(1, Math.min(365, parseInt(mValid[1],10)));

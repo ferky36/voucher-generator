@@ -9,7 +9,23 @@ export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON
 export const $ = (s)=>document.querySelector(s);
 export const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
 export function setHidden(el, bool){ el.classList.toggle('hidden', !!bool); }
-export function toastBadge(el, text, cls="success"){ el.textContent=text; el.className = `badge ${cls}`; setHidden(el,false); setTimeout(()=>setHidden(el,true),5000); }
+let __toastState = { level: null, expires: 0 };
+export function toastBadge(el, text, cls="success"){ 
+  el.textContent = text; 
+  el.className = `badge ${cls}`; 
+  setHidden(el,false); 
+  const ttl = 5000;
+  __toastState.level = cls;
+  __toastState.expires = Date.now() + ttl;
+  setTimeout(()=>{ setHidden(el,true); if (Date.now() >= __toastState.expires) { __toastState.level=null; } }, ttl);
+}
+
+// Hanya tampilkan toast jika tidak ada toast 'warn' aktif (untuk info/status rendah)
+export function toastSafe(el, text, cls="success"){ 
+  if (__toastState.level === 'warn' && Date.now() < __toastState.expires) return false; 
+  toastBadge(el, text, cls); 
+  return true; 
+}
 
 // Normalisasi error Supabase/Postgres (RPC)
 export function explainErr(error){

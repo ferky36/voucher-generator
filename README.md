@@ -20,3 +20,4 @@
 ## Catatan
 - FE `claim_code()` & `mark_voucher_used()` otomatis memakai `auth.uid()` — user harus login.
 - Ganti policy insert menjadi hanya admin (email tertentu) jika perlu.
+

@@ -1,5 +1,5 @@
 // js/user.js
-import { supabase, $, sleep, setHidden, toastBadge, explainErr } from './app.js';
+import { supabase, $, sleep, setHidden, toastBadge, toastSafe, explainErr } from './app.js';
 
 // OTP login
 const userAuthBox = $('#userAuthBox');
@@ -110,14 +110,15 @@ async function updateEligibility(){
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return;
     if (row.eligible){
-      toastBadge(getStatusEl(), 'Siap generate');
+      // Info-level: jangan menimpa toast warning yang aktif
+      toastSafe(getStatusEl(), 'Siap generate');
     } else if (row.reason === 'COOLDOWN'){
       const left = formatRemaining(row.remaining_seconds);
-      toastBadge(getStatusEl(), 'Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam '+left, 'warn');
+      toastSafe(getStatusEl(), 'Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam '+left, 'warn');
       const last = await fetchLastUsedVoucher();
       if (last) showUsedVoucher(last);
     } else if (row.reason === 'HAS_ACTIVE_CLAIM'){
-      toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
+      toastSafe(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
       const active = await fetchActiveClaim();
       if (active) showClaimUI(active);
       setHidden(btnGenerate,true);
