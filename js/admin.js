@@ -16,6 +16,9 @@ const whoAdmin = document.getElementById('whoAdmin');
 const maxClaimsInput = $('#maxClaims');
 const btnSaveMaxClaims = $('#btnSaveMaxClaims');
 const maxClaimsStatus = $('#maxClaimsStatus');
+// Helpers to hide empty badges
+function hideIfEmpty(el){ try{ const t=(el?.textContent||'').trim(); if(el) el.classList.toggle('hidden', t.length===0); }catch{} }
+function cleanupBadges(){ hideIfEmpty($('#authStatus')); hideIfEmpty($('#roleStatus')); hideIfEmpty($('#maxClaimsStatus')); hideIfEmpty($('#importStatus')); }
 // OCR overlay
 const ocrOverlay = $('#ocrOverlay');
 const ocrFile = $('#ocrFile');
@@ -58,7 +61,7 @@ async function paintAdminUIFromSession(){
   }
 }
 
-(async ()=>{ await paintAdminUIFromSession(); })();
+(async ()=>{ await paintAdminUIFromSession(); cleanupBadges(); })();
 
 async function loadMaxClaims(){
   try{
@@ -83,6 +86,7 @@ btnLogin?.addEventListener('click', async ()=>{
     sessionStorage.setItem(ADMIN_PW_OK_KEY, '1');
     await paintAdminUIFromSession();
   }
+  cleanupBadges();
 
 });
 
@@ -93,6 +97,7 @@ const doAdminLogout = async ()=>{
   document.body.classList.remove('auth');
   document.body.classList.add('unauth');
   toastBadge(authStatus, 'Logged out');
+  cleanupBadges();
 };
 
 btnLogoutAdmin?.addEventListener('click', doAdminLogout);
@@ -103,6 +108,7 @@ btnSaveMaxClaims?.addEventListener('click', async ()=>{
   const { error } = await supabase.rpc('set_max_claims_per_user', { p_value: isNaN(val)?0:val });
   if (error){ const { message } = explainErr(error); toastBadge(maxClaimsStatus, message, 'warn'); }
   else { toastBadge(maxClaimsStatus, 'Tersimpan'); }
+  cleanupBadges();
 });
 
 // OCR + Import
@@ -335,9 +341,11 @@ btnRlsDiag?.addEventListener('click', async () => {
       'Jalankan SQL file: supabase_diag.sql di SQL Editor, lalu coba lagi.'
     ].join('\n');
     if (diagOut) diagOut.textContent = msg;
+    cleanupBadges();
     return;
   }
   if (diagOut) diagOut.textContent = JSON.stringify(data, null, 2);
+  cleanupBadges();
 });
 
 // Profiles/Role helpers
@@ -379,9 +387,10 @@ btnWhoAmI?.addEventListener('click', async () => {
     .select('user_id,email,role,created_at')
     .eq('user_id', user.id)
     .maybeSingle();
-  if (error) { const { message } = explainErr(error); toastBadge(roleStatus, 'Gagal cek role: '+message, 'warn'); return; }
+  if (error) { const { message } = explainErr(error); toastBadge(roleStatus, 'Gagal cek role: '+message, 'warn'); cleanupBadges(); return; }
   if (!data) { toastBadge(roleStatus, 'Belum ada profile. Klik "Jadikan Saya ADMIN" untuk membuat.', 'warn'); return; }
   toastBadge(roleStatus, `Role: ${data.role || 'user'} (${data.email||user.email||''})`);
+  cleanupBadges();
 });
 
 btnMakeMeAdmin?.addEventListener('click', async () => {
@@ -390,10 +399,11 @@ btnMakeMeAdmin?.addEventListener('click', async () => {
   const pwd = await openPwdModal();
   if (!pwd) { toastBadge(roleStatus, 'Dibatalkan', 'warn'); return; }
   const { error: authErr } = await supabase.auth.signInWithPassword({ email: user.email, password: pwd });
-  if (authErr) { const { message } = explainErr(authErr); toastBadge(roleStatus, 'Password salah: '+message, 'warn'); return; }
+  if (authErr) { const { message } = explainErr(authErr); toastBadge(roleStatus, 'Password salah: '+message, 'warn'); cleanupBadges(); return; }
   sessionStorage.setItem(ADMIN_PW_OK_KEY, '1');
   const { data, error } = await supabase.rpc('promote_self_to_admin');
-  if (error) { const { message } = explainErr(error); toastBadge(roleStatus, 'Gagal set admin: '+message, 'warn'); return; }
+  if (error) { const { message } = explainErr(error); toastBadge(roleStatus, 'Gagal set admin: '+message, 'warn'); cleanupBadges(); return; }
   toastBadge(roleStatus, 'Sukses: role kamu sekarang ADMIN');
+  cleanupBadges();
   await paintAdminUIFromSession();
 });
