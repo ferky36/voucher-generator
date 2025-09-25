@@ -9,25 +9,50 @@ const btnLogin = $('#btnLogin');
 const btnLogoutAdmin = $('#btnLogoutAdmin');
 const btnLogoutAdminHeader = $('#btnLogoutAdminHeader');
 const authStatus = $('#authStatus');
+const roleCard = $('#roleCard');
+const adminMainCard = $('#adminMainCard');
 
-(async ()=>{
+async function paintAdminUIFromSession(){
   const { data:{ session } } = await supabase.auth.getSession();
   let isPwd = false;
+  let isAdmin = false;
   if (session) {
     try{
       const { data, error } = await supabase.rpc('is_password_user');
       isPwd = !error && !!data;
-      if (!isPwd) {
-        // Tendang user OTP dari halaman admin
-        await supabase.auth.signOut();
-        toastBadge(authStatus, 'Akses admin hanya untuk akun password. Silakan login email/password.', 'warn');
-      }
     }catch{}
+    if (isPwd) {
+      try{
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user){
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          isAdmin = (prof && (prof.role === 'admin' || prof.role === 'superadmin'));
+        }
+      }catch{}
+    }
   }
-  if (isPwd) authBox?.classList.add('hidden'); else authBox?.classList.remove('hidden');
+
+  // Gate: hanya password-login dianggap auth untuk halaman ini
   document.body.classList.toggle('auth', isPwd);
   document.body.classList.toggle('unauth', !isPwd);
-})();
+  if (isPwd) authBox?.classList.add('hidden'); else authBox?.classList.remove('hidden');
+
+  // Tampilkan/hidden kartu utama admin berdasarkan role
+  if (adminMainCard) adminMainCard.classList.toggle('hidden', !isAdmin);
+  if (roleCard) roleCard.classList.toggle('hidden', !isPwd);
+
+  if (session && !isPwd){
+    toastBadge(authStatus, 'Akses admin hanya untuk akun password. Silakan login email/password.', 'warn');
+  } else if (isPwd && !isAdmin){
+    toastBadge($('#roleStatus'), 'Login OK. Kamu belum admin. Gunakan tombol "Jadikan Saya ADMIN" (khusus akun password).', 'warn');
+  }
+}
+
+(async ()=>{ await paintAdminUIFromSession(); })();
 
 btnLogin?.addEventListener('click', async ()=>{
   const { error } = await supabase.auth.signInWithPassword({
@@ -38,9 +63,7 @@ btnLogin?.addEventListener('click', async ()=>{
     toastBadge(authStatus, message, 'warn');
   } else {
     toastBadge(authStatus, 'Login sukses');
-    authBox?.classList.add('hidden');
-    document.body.classList.add('auth');
-    document.body.classList.remove('unauth');
+    await paintAdminUIFromSession();
   }
 
 });
