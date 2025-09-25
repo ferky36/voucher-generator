@@ -364,9 +364,10 @@ async function paintUserVouchers(){
     }
     const html = (rows||[]).map(r=>{
       const s = r.used_at ? 'used' : (r.status||'');
+      const copyBtn = r.used_at ? `<button class="ghost" data-copy="${r.code}">Copy</button>` : '';
       return `<div class="row" style="justify-content:space-between;border:1px dashed #2a3446;border-radius:8px;padding:6px 8px;margin:4px 0">
-        <span>${maskCode(r.code)} <span class=\"badge\">[${s}]</span> ${fmt(r.used_at || r.claimed_at)}</span>
-        <button class=\"ghost\" data-copy=\"${r.code}\">Copy</button>
+        <span>${maskCode(r.code)} <span class="badge">[${s}]</span> ${fmt(r.used_at || r.claimed_at)}</span>
+        ${copyBtn}
       </div>`;
     }).join('');
     if (myVouchersEl) myVouchersEl.innerHTML = html || 'Belum ada riwayat.';
