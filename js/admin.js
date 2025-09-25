@@ -9,46 +9,40 @@ const btnLogin = $('#btnLogin');
 const btnLogoutAdmin = $('#btnLogoutAdmin');
 const btnLogoutAdminHeader = $('#btnLogoutAdminHeader');
 const authStatus = $('#authStatus');
+const ADMIN_PW_OK_KEY = 'admin_pw_ok';
 const roleCard = $('#roleCard');
 const adminMainCard = $('#adminMainCard');
 
 async function paintAdminUIFromSession(){
   const { data:{ session } } = await supabase.auth.getSession();
-  let isPwd = false;
+  const pwOk = sessionStorage.getItem(ADMIN_PW_OK_KEY) === '1';
   let isAdmin = false;
-  if (session) {
+  if (session && pwOk) {
     try{
-      const { data, error } = await supabase.rpc('is_password_user');
-      isPwd = !error && !!data;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user){
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        isAdmin = (prof && (prof.role === 'admin' || prof.role === 'superadmin'));
+      }
     }catch{}
-    if (isPwd) {
-      try{
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user){
-          const { data: prof } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('user_id', user.id)
-            .maybeSingle();
-          isAdmin = (prof && (prof.role === 'admin' || prof.role === 'superadmin'));
-        }
-      }catch{}
-    }
   }
 
-  // Gate: hanya password-login dianggap auth untuk halaman ini
-  document.body.classList.toggle('auth', isPwd);
-  document.body.classList.toggle('unauth', !isPwd);
-  if (isPwd) authBox?.classList.add('hidden'); else authBox?.classList.remove('hidden');
+  const authed = !!(session && pwOk);
+  document.body.classList.toggle('auth', authed);
+  document.body.classList.toggle('unauth', !authed);
+  if (authed) authBox?.classList.add('hidden'); else authBox?.classList.remove('hidden');
 
-  // Tampilkan/hidden kartu utama admin berdasarkan role
   if (adminMainCard) adminMainCard.classList.toggle('hidden', !isAdmin);
-  if (roleCard) roleCard.classList.toggle('hidden', !isPwd);
+  if (roleCard) roleCard.classList.toggle('hidden', !authed);
 
-  if (session && !isPwd){
+  if (session && !pwOk){
     toastBadge(authStatus, 'Akses admin hanya untuk akun password. Silakan login email/password.', 'warn');
-  } else if (isPwd && !isAdmin){
-    toastBadge($('#roleStatus'), 'Login OK. Kamu belum admin. Gunakan tombol "Jadikan Saya ADMIN" (khusus akun password).', 'warn');
+  } else if (authed && !isAdmin){
+    toastBadge($('#roleStatus'), 'Login OK. Kamu belum admin. Gunakan tombol "Jadikan Saya ADMIN".', 'warn');
   }
 }
 
@@ -63,6 +57,7 @@ btnLogin?.addEventListener('click', async ()=>{
     toastBadge(authStatus, message, 'warn');
   } else {
     toastBadge(authStatus, 'Login sukses');
+    sessionStorage.setItem(ADMIN_PW_OK_KEY, '1');
     await paintAdminUIFromSession();
   }
 
@@ -70,6 +65,7 @@ btnLogin?.addEventListener('click', async ()=>{
 
 const doAdminLogout = async ()=>{
   await supabase.auth.signOut();
+  sessionStorage.removeItem(ADMIN_PW_OK_KEY);
   authBox?.classList.remove('hidden');
   document.body.classList.remove('auth');
   document.body.classList.add('unauth');
@@ -313,7 +309,13 @@ btnWhoAmI?.addEventListener('click', async () => {
 btnMakeMeAdmin?.addEventListener('click', async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { toastBadge(roleStatus, 'Belum login', 'warn'); return; }
+  const pwd = prompt('Masukkan password akun kamu untuk konfirmasi jadi ADMIN:');
+  if (!pwd) { toastBadge(roleStatus, 'Dibatalkan', 'warn'); return; }
+  const { error: authErr } = await supabase.auth.signInWithPassword({ email: user.email, password: pwd });
+  if (authErr) { const { message } = explainErr(authErr); toastBadge(roleStatus, 'Password salah: '+message, 'warn'); return; }
+  sessionStorage.setItem(ADMIN_PW_OK_KEY, '1');
   const { data, error } = await supabase.rpc('promote_self_to_admin');
   if (error) { const { message } = explainErr(error); toastBadge(roleStatus, 'Gagal set admin: '+message, 'warn'); return; }
   toastBadge(roleStatus, 'Sukses: role kamu sekarang ADMIN');
+  await paintAdminUIFromSession();
 });
