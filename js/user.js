@@ -27,14 +27,28 @@ const sliderBubble = document.getElementById('sliderBubble');
   try { const { data:{ user } } = await supabase.auth.getUser(); if (typeof whoUser!== 'undefined' && whoUser) whoUser.textContent = user?.email ? `Logged in as ${user.email}` : ''; } catch {}
 })();
 
-updateEligibility();
+// Throttled eligibility caller
+let _eligibilityInFlight = false;
+let _eligibilityLastAt = 0;
+const ELIGIBILITY_MIN_INTERVAL = 1500; // ms
+
+async function requestEligibility(opts={}){
+  const force = !!opts.force;
+  const now = Date.now();
+  if (_eligibilityInFlight) return;
+  if (!force && (now - _eligibilityLastAt) < ELIGIBILITY_MIN_INTERVAL) return;
+  _eligibilityInFlight = true;
+  try { await updateEligibility(); } finally { _eligibilityLastAt = Date.now(); _eligibilityInFlight = false; }
+}
+
+requestEligibility({ force:true });
 paintSlider(revealSlider);
 
 supabase.auth.onAuthStateChange((_evt, session)=>{
   document.body.classList.toggle('auth', !!session);
   document.body.classList.toggle('unauth', !session);
   try { setHidden(genLoading, true); } catch(e) {}
-  updateEligibility();
+  requestEligibility({ force:true });
   paintSlider(revealSlider);
   if (session) userAuthBox?.classList.add('hidden');
   else userAuthBox?.classList.remove('hidden');
@@ -234,7 +248,7 @@ btnGenerate.onclick = async () => {
         toastBadge(getStatusEl(), 'Gagal generate: ' + message, 'warn');
       }
       setHidden(btnGenerate,false);
-      updateEligibility();
+      requestEligibility({ force:true });
       paintSlider(revealSlider);
       return;
     }
