@@ -121,6 +121,7 @@ function formatRemaining(sec){
 }
 async function updateEligibility(){
   try{
+    try{ setHidden(genLoading,true); }catch{}
     const { data, error } = await supabase.rpc('get_generate_eligibility');
     if (error) {
       const { message } = explainErr(error);
@@ -143,9 +144,13 @@ async function updateEligibility(){
       const last = await fetchLastUsedVoucher();
       if (last) showUsedVoucher(last);
     } else if (row.reason === 'HAS_ACTIVE_CLAIM'){
-      toastSafe(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
       const active = await fetchActiveClaim();
-      if (active) showClaimUI(active);
+      if (active){
+        showClaimUI(active);
+        toastSafe(getStatusEl(), `Voucher ${maskCode(active.code)} belum dimunculkan. Geser slider untuk memunculkannya.`, 'warn');
+      } else {
+        toastSafe(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn');
+      }
       setHidden(btnGenerate,true);
     } else if (row.reason === 'LIMIT_REACHED'){
       toastBadge(getStatusEl(), 'Batas maksimal klaim telah tercapai.', 'warn');
@@ -153,6 +158,7 @@ async function updateEligibility(){
     }
   }catch(e){ /* ignore */ }
   await paintUserVouchers();
+  try{ setHidden(genLoading,true); }catch{}
 }
 
 // Ambil voucher yang sudah di-claim tapi belum dipakai
@@ -181,6 +187,7 @@ function showClaimUI(row){
   if (voucherCodeEl) voucherCodeEl.textContent = '';
   setHidden(claimWrap, false);
   setHidden(voucherShow, true);
+  try{ setHidden(btnCopy, true); }catch{}
 }
 
 
@@ -212,7 +219,10 @@ btnGenerate.onclick = async () => {
         if (last) showUsedVoucher(last);
       } else if (code === 'HAS_ACTIVE_CLAIM'){
         const row = await fetchActiveClaim();
-        if (row) { showClaimUI(row); toastBadge(getStatusEl(), 'Voucher kamu sudah tersedia. Geser slider untuk memunculkannya.', 'warn'); }
+        if (row) {
+          showClaimUI(row);
+          toastBadge(getStatusEl(), `Voucher ${maskCode(row.code)} belum dimunculkan. Geser slider untuk memunculkannya.`, 'warn');
+        }
         else { toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn'); }
       } else if (code === 'OUT_OF_STOCK'){
         toastBadge(getStatusEl(), 'Stok voucher habis', 'warn');
@@ -240,6 +250,20 @@ btnGenerate.onclick = async () => {
     setHidden(genLoading,true);
   }
 };
+
+// Override handler to ensure consistent feedback (in case of prior handler versions)
+try{
+  btnCopy.onclick = async ()=>{
+    try{
+      await navigator.clipboard.writeText((voucherCodeEl.textContent||'').trim());
+      btnCopy.textContent='Tersalin ✓';
+      setTimeout(()=>btnCopy.textContent='Copy', 1200);
+    }catch{
+      btnCopy.textContent='Gagal copy';
+      setTimeout(()=>btnCopy.textContent='Copy', 1500);
+    }
+  };
+}catch{}
 
 revealSlider.addEventListener('input', async (e)=>{
   const val = Number(e.target.value);
@@ -314,6 +338,7 @@ function showUsedVoucher(row){
   // Tampilkan tombol generate jika masih ada sisa klaim
   if (typeof remainingClaims === 'number' && remainingClaims > 0) setHidden(btnGenerate,false);
   else setHidden(btnGenerate,true);
+  try{ setHidden(btnCopy,false); btnCopy.textContent='Copy'; }catch{}
 }
 
 // Riwayat voucher + remaining
@@ -345,12 +370,15 @@ async function paintUserVouchers(){
       </div>`;
     }).join('');
     if (myVouchersEl) myVouchersEl.innerHTML = html || 'Belum ada riwayat.';
-    myVouchersEl?.addEventListener('click', async (e)=>{
-      const t = e.target;
-      if (t && t.matches('button[data-copy]')){
-        try{ await navigator.clipboard.writeText(t.getAttribute('data-copy')); t.textContent='Tersalin'; setTimeout(()=>t.textContent='Copy',1500);}catch{}
-      }
-    }, { once:true });
+    if (myVouchersEl && !myVouchersEl.__copyBound){
+      myVouchersEl.addEventListener('click', async (e)=>{
+        const t = e.target;
+        if (t && t.matches('button[data-copy]')){
+          try{ await navigator.clipboard.writeText(t.getAttribute('data-copy')); t.textContent='Tersalin'; setTimeout(()=>t.textContent='Copy',1200);}catch{}
+        }
+      });
+      myVouchersEl.__copyBound = true;
+    }
 
     // remaining
     const { data: maxRes } = await supabase.rpc('get_max_claims_per_user');
