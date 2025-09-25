@@ -91,6 +91,7 @@ const voucherCodeEl = $('#voucherCode');
 const btnCopy = $('#btnCopy');
 const myVouchersEl = $('#myVouchers');
 const remainClaimsEl = $('#remainClaims');
+let remainingClaims = null;
 
 // === Eligibility helpers (UI-only) ===
 function formatRemaining(sec){
@@ -114,8 +115,13 @@ async function updateEligibility(){
     if (row.eligible){
       // Info-level: jangan menimpa toast warning yang aktif
       toastSafe(getStatusEl(), 'Siap generate');
+      if (typeof remainingClaims === 'number' && remainingClaims > 0) setHidden(btnGenerate,false);
     } else if (row.reason === 'COOLDOWN'){
       const left = formatRemaining(row.remaining_seconds);
+      // Jika ada sisa klaim (server lama) tetap izinkan generate
+      if (typeof remainingClaims === 'number' && remainingClaims > 0) {
+        setHidden(btnGenerate,false);
+      }
       toastSafe(getStatusEl(), 'Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam '+left, 'warn');
       const last = await fetchLastUsedVoucher();
       if (last) showUsedVoucher(last);
@@ -126,6 +132,7 @@ async function updateEligibility(){
       setHidden(btnGenerate,true);
     } else if (row.reason === 'LIMIT_REACHED'){
       toastBadge(getStatusEl(), 'Batas maksimal klaim telah tercapai.', 'warn');
+      setHidden(btnGenerate,true);
     }
   }catch(e){ /* ignore */ }
   await paintUserVouchers();
@@ -287,7 +294,9 @@ function showUsedVoucher(row){
     revealSlider.disabled = true;
     if (typeof paintSlider === 'function') paintSlider(revealSlider);
   }
-  setHidden(btnGenerate, true);                // sembunyikan tombol generate
+  // Tampilkan tombol generate jika masih ada sisa klaim
+  if (typeof remainingClaims === 'number' && remainingClaims > 0) setHidden(btnGenerate,false);
+  else setHidden(btnGenerate,true);
 }
 
 // Riwayat voucher + remaining
@@ -313,11 +322,15 @@ async function paintUserVouchers(){
     const max = parseInt(maxRes||0,10) || 0;
     let usedCnt = (rows||[]).filter(r=>!!r.used_at).length;
     let activeCnt = (rows||[]).filter(r=>!r.used_at && (r.status==='claimed')).length;
-    if (max>0 && remainClaimsEl){
+    if (max>0){
       const left = Math.max(0, max - (usedCnt + activeCnt));
-      remainClaimsEl.textContent = `Sisa klaim: ${left} / ${max}`;
-    } else if (remainClaimsEl){
-      remainClaimsEl.textContent = 'Tanpa batas';
+      remainingClaims = left;
+      if (remainClaimsEl) remainClaimsEl.textContent = `Sisa klaim: ${left} / ${max}`;
+      setHidden(btnGenerate, left<=0);
+    } else {
+      remainingClaims = null;
+      if (remainClaimsEl) remainClaimsEl.textContent = 'Tanpa batas';
+      setHidden(btnGenerate,false);
     }
   }catch{}
 }
