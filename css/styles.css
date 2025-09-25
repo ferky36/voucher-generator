@@ -20,6 +20,7 @@ input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25);outli
 .codes{font-family:ui-monospace,Menlo,Consolas,monospace;font-variant-ligatures:none;line-height:1.45}
 .hidden{display:none}
 .badge{display:inline-flex;align-items:center;gap:8px;padding:.35rem .7rem;border-radius:9999px;border:1px solid #31415e;background:#0f1522;color:#cbd5e1;font-size:12.5px;line-height:1;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.badge:empty{display:none!important}
 .badge.success{color:#d1fae5;border-color:#065f46;background:#064e3b88}
 .badge.warn{color:#ffe2b8;border-color:#b45309;background:#713f1288}
 .badge.user::before{content:"";width:14px;height:14px;display:inline-block;background:url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%23cbd5e1\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"/><circle cx=\"12\" cy=\"7\" r=\"4\"/></svg>') center/contain no-repeat}
@@ -42,6 +43,10 @@ input[type=range]{appearance:none;height:10px;border-radius:999px;background:lin
 input[type=range]::-webkit-slider-thumb{appearance:none;width:20px;height:20px;border-radius:50%;background:#3b82f6;border:2px solid #97b9ff;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#3b82f6;border:2px solid #97b9ff;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 .bubble{position:absolute;top:6px;transform:translateX(-50%);background:#0f1522;border:1px solid #31415e;color:#cbd5e1;border-radius:8px;padding:2px 6px;font-size:12px;transition:left .08s ease}
+/* voucher show card */
+#voucherShow{display:flex;flex-direction:column;align-items:center;text-align:center}
+#voucherShow .big{font-size:44px;letter-spacing:2px}
+#voucherShow .badge{margin:4px auto 8px}
 /* modal */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
 .modal-overlay:not(.hidden){display:flex}
