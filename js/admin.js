@@ -279,12 +279,7 @@ btnWhoAmI?.addEventListener('click', async () => {
 btnMakeMeAdmin?.addEventListener('click', async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { toastBadge(roleStatus, 'Belum login', 'warn'); return; }
-  const payload = { user_id: user.id, email: user.email, role: 'admin' };
-  const { error } = await supabase
-    .from('profiles')
-    .upsert(payload, { onConflict: 'user_id', ignoreDuplicates: false })
-    .select()
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('promote_self_to_admin');
   if (error) { const { message } = explainErr(error); toastBadge(roleStatus, 'Gagal set admin: '+message, 'warn'); return; }
   toastBadge(roleStatus, 'Sukses: role kamu sekarang ADMIN');
 });

@@ -53,6 +53,8 @@ export function explainErr(error){
     return { code: 'CANNOT_MARK_USED', message: 'Voucher tidak dapat ditandai digunakan (mungkin sudah digunakan atau bukan milikmu).' };
   if (/Only admin can (import|wipe)/i.test(raw))
     return { code: 'ADMIN_ONLY', message: 'Aksi ini hanya untuk ADMIN.' };
+  if (raw.startsWith('ONLY_PASSWORD_USERS'))
+    return { code: 'ONLY_PASSWORD_USERS', message: 'Hanya akun dengan password (bukan OTP) yang boleh menjadikan dirinya ADMIN.' };
 
   // Auth API common errors
   if (error.name === 'AuthApiError' || error.name === 'AuthError'){

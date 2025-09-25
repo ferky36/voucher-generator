@@ -61,9 +61,8 @@
         <button id="btnLogin" class="primary">Login</button>
         <span id="authStatus" class="badge hidden"></span>
       </div>
-  <div class="row authed-only" style="justify-content:flex-end;margin-bottom:8px">
-    <button id="btnLogoutAdmin" class="ghost">Logout</button>
-  </div>
+  <!-- Hapus logout di dalam authBox karena card ini disembunyikan setelah login -->
+  
 
     </div>
 
@@ -72,6 +71,7 @@
       <div class="row">
         <button id="btnWhoAmI" class="ghost">Cek Role Saya</button>
         <button id="btnMakeMeAdmin" class="primary">Jadikan Saya ADMIN</button>
+        <button id="btnLogoutAdmin" class="ghost">Logout</button>
         <span id="roleStatus" class="badge hidden"></span>
       </div>
     </div>
@@ -105,8 +105,7 @@
   </div>
   </div>
 
-  <!-- Fixed Logout visible saat sudah login (authed-only) -->
-  <button id="btnLogoutAdminHeader" class="ghost authed-only" style="position:fixed;top:12px;right:16px;z-index:50">Logout</button>
+  
 
   <script type="module" src="./js/app.js"></script>
   <script type="module" src="./js/admin.js"></script>
