@@ -38,7 +38,8 @@
     .loading:before{content:"";width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     /* modal */
-    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
+    .modal-overlay:not(.hidden){display:flex}
     .modal{background:#121722;border:1px solid #232b3a;border-radius:12px;padding:16px;max-width:420px;width:92%}
     .modal h3{margin:0 0 10px;font-size:16px}
     .modal .row{justify-content:flex-end}

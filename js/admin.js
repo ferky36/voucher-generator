@@ -330,12 +330,13 @@ function openPwdModal(){
     function cleanup(){
       btnAdminPwdOk?.removeEventListener('click', onOk);
       btnAdminPwdCancel?.removeEventListener('click', onCancel);
+      adminPwdInput?.removeEventListener('keydown', onKey);
       adminPwdModal.classList.add('hidden');
     }
     btnAdminPwdOk?.addEventListener('click', onOk, { once:true });
     btnAdminPwdCancel?.addEventListener('click', onCancel, { once:true });
     const onKey = (e)=>{ if (e.key==='Enter') onOk(); if (e.key==='Escape') onCancel(); };
-    adminPwdInput?.addEventListener('keydown', onKey, { once:true });
+    adminPwdInput?.addEventListener('keydown', onKey);
   });
 }
 
