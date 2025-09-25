@@ -12,6 +12,7 @@ const authStatus = $('#authStatus');
 const ADMIN_PW_OK_KEY = 'admin_pw_ok';
 const roleCard = $('#roleCard');
 const adminMainCard = $('#adminMainCard');
+const whoAdmin = document.getElementById('whoAdmin');
 const maxClaimsInput = $('#maxClaims');
 const btnSaveMaxClaims = $('#btnSaveMaxClaims');
 const maxClaimsStatus = $('#maxClaimsStatus');
@@ -24,6 +25,7 @@ async function paintAdminUIFromSession(){
     try{
       const { data: { user } } = await supabase.auth.getUser();
       if (user){
+        if (whoAdmin) whoAdmin.textContent = `Logged in as ${user.email||''}`;
         const { data: prof } = await supabase
           .from('profiles')
           .select('role')
@@ -38,6 +40,7 @@ async function paintAdminUIFromSession(){
   document.body.classList.toggle('auth', authed);
   document.body.classList.toggle('unauth', !authed);
   if (authed) authBox?.classList.add('hidden'); else authBox?.classList.remove('hidden');
+  if (!authed && whoAdmin) whoAdmin.textContent = '';
 
   if (adminMainCard) adminMainCard.classList.toggle('hidden', !isAdmin);
   if (roleCard) roleCard.classList.toggle('hidden', !authed);

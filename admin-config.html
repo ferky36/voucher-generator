@@ -74,11 +74,16 @@
 
     <div class="card authed-only" id="roleCard" style="margin-bottom:12px;background:#0f131b">
       <h3 style="margin:0 0 8px">Role / Profiles</h3>
-      <div class="row">
-        <button id="btnWhoAmI" class="ghost">Cek Role Saya</button>
-        <button id="btnMakeMeAdmin" class="primary">Jadikan Saya ADMIN</button>
-        <button id="btnLogoutAdmin" class="ghost">Logout</button>
-        <span id="roleStatus" class="badge hidden"></span>
+      <div class="row" style="align-items:center;justify-content:space-between">
+        <div class="row" style="gap:8px">
+          <button id="btnWhoAmI" class="ghost">Cek Role Saya</button>
+          <button id="btnMakeMeAdmin" class="primary">Jadikan Saya ADMIN</button>
+          <button id="btnLogoutAdmin" class="ghost">Logout</button>
+        </div>
+        <div class="row" style="gap:8px">
+          <span id="whoAdmin" class="badge authed-only"></span>
+          <span id="roleStatus" class="badge hidden"></span>
+        </div>
       </div>
     </div>
 

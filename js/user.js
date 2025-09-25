@@ -23,6 +23,7 @@ const sliderWrap = $('#sliderWrap');
   document.body.classList.toggle('auth', !!session);
   document.body.classList.toggle('unauth', !session);
   try { setHidden(genLoading, true); } catch(e) {}
+  try { const { data:{ user } } = await supabase.auth.getUser(); if (typeof whoUser!== 'undefined' && whoUser) whoUser.textContent = user?.email ? `Logged in as ${user.email}` : ''; } catch {}
 })();
 
 updateEligibility();
@@ -311,11 +312,29 @@ async function paintUserVouchers(){
       .order('claimed_at', { ascending:false })
       .limit(50);
     if (error) { if (myVouchersEl) myVouchersEl.textContent = 'Gagal memuat riwayat.'; return; }
-    const lines = (rows||[]).map(r=>{
+    function maskCode(code){
+      const parts = (code||'').split('-');
+      const last4 = (parts[1]||'').slice(-4);
+      return '*****-' + last4;
+    }
+    function fmt(ts){
+      if (!ts) return '';
+      try{ return new Date(ts).toLocaleString('id-ID', { dateStyle:'medium', timeStyle:'short' }); }catch{ return ts; }
+    }
+    const html = (rows||[]).map(r=>{
       const s = r.used_at ? 'used' : (r.status||'');
-      return `${r.code}  [${s}]  ${r.claimed_at||''}`;
-    });
-    if (myVouchersEl) myVouchersEl.textContent = lines.length? lines.join('\n') : 'Belum ada riwayat.';
+      return `<div class="row" style="justify-content:space-between;border:1px dashed #2a3446;border-radius:8px;padding:6px 8px;margin:4px 0">
+        <span>${maskCode(r.code)} <span class=\"badge\">[${s}]</span> ${fmt(r.used_at || r.claimed_at)}</span>
+        <button class=\"ghost\" data-copy=\"${r.code}\">Copy</button>
+      </div>`;
+    }).join('');
+    if (myVouchersEl) myVouchersEl.innerHTML = html || 'Belum ada riwayat.';
+    myVouchersEl?.addEventListener('click', async (e)=>{
+      const t = e.target;
+      if (t && t.matches('button[data-copy]')){
+        try{ await navigator.clipboard.writeText(t.getAttribute('data-copy')); t.textContent='Tersalin'; setTimeout(()=>t.textContent='Copy',1500);}catch{}
+      }
+    }, { once:true });
 
     // remaining
     const { data: maxRes } = await supabase.rpc('get_max_claims_per_user');

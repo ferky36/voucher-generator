@@ -54,7 +54,10 @@
 <body class="unauth">
   <header>
     <h1>Voucher User — Generate & Slide</h1>
-    <button id="btnLogout" class="ghost authed-only">Logout</button>
+    <div class="row" style="gap:8px">
+      <span id="whoUser" class="badge authed-only"></span>
+      <button id="btnLogout" class="ghost authed-only">Logout</button>
+    </div>
   </header>
   <div class="container">
     <div class="card auth-only" id="userAuthBox" style="margin-bottom:12px;background:#0f131b">
