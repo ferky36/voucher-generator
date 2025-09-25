@@ -12,10 +12,21 @@ const authStatus = $('#authStatus');
 
 (async ()=>{
   const { data:{ session } } = await supabase.auth.getSession();
-  if (session) authBox?.classList.add('hidden');
-  document.body.classList.toggle('auth', !!session);
-  document.body.classList.toggle('unauth', !session);
-
+  let isPwd = false;
+  if (session) {
+    try{
+      const { data, error } = await supabase.rpc('is_password_user');
+      isPwd = !error && !!data;
+      if (!isPwd) {
+        // Tendang user OTP dari halaman admin
+        await supabase.auth.signOut();
+        toastBadge(authStatus, 'Akses admin hanya untuk akun password. Silakan login email/password.', 'warn');
+      }
+    }catch{}
+  }
+  if (isPwd) authBox?.classList.add('hidden'); else authBox?.classList.remove('hidden');
+  document.body.classList.toggle('auth', isPwd);
+  document.body.classList.toggle('unauth', !isPwd);
 })();
 
 btnLogin?.addEventListener('click', async ()=>{
