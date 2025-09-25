@@ -76,3 +76,38 @@ export function explainErr(error){
   // Fallback
   return { code: code || 'UNKNOWN', message: raw || 'Terjadi kesalahan yang tidak diketahui.' };
 }
+
+// ---- Theme helper (light/dark) ----
+function applyTheme(t){
+  try{
+    document.documentElement.setAttribute('data-theme', t);
+    try{ localStorage.setItem('theme', t); }catch{}
+    const btn = document.getElementById('btnTheme');
+    if (btn) btn.textContent = (t === 'light') ? 'Dark Mode' : 'Light Mode';
+  }catch{}
+}
+
+(()=>{
+  // init on module load
+  let t = 'dark';
+  try{ t = localStorage.getItem('theme') || 'dark'; }catch{}
+  applyTheme(t);
+  // hook button after DOM is ready
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const b = document.getElementById('btnTheme');
+      if (b) b.addEventListener('click', ()=>{
+        const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+        applyTheme(cur === 'light' ? 'dark' : 'light');
+      });
+    });
+  } else {
+    const b = document.getElementById('btnTheme');
+    if (b) b.addEventListener('click', ()=>{
+      const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+      applyTheme(cur === 'light' ? 'dark' : 'light');
+    });
+  }
+})();
+
+export const _applyTheme = applyTheme;

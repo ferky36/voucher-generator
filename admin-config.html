@@ -40,9 +40,26 @@
     /* modal */
     .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
     .modal-overlay:not(.hidden){display:flex}
-    .modal{background:#121722;border:1px solid #232b3a;border-radius:12px;padding:16px;max-width:420px;width:92%}
+    .modal{background:#121722;border:1px solid #232b3a;border-radius:12px;padding:16px;max-width:460px;width:92%;box-shadow:0 20px 40px rgba(0,0,0,.45)}
     .modal h3{margin:0 0 10px;font-size:16px}
     .modal .row{justify-content:flex-end}
+    /* redesign overrides */
+    .card{border-radius:16px;border-color:#273246;background:linear-gradient(180deg,#121722 0%,#101520 100%);box-shadow:0 8px 24px rgba(0,0,0,.35)}
+    .card:hover{box-shadow:0 10px 28px rgba(0,0,0,.42)}
+    header{backdrop-filter:saturate(1.1) blur(2px);background:#0b0d12d9;border-bottom-color:#1c2533}
+    button{border-radius:12px;padding:10px 14px;transition:all .15s ease;border:1px solid #2b3850}
+    button.primary{background:linear-gradient(180deg,var(--accent),#1e66d0);box-shadow:0 6px 16px rgba(47,128,237,.35)}
+    button.primary:hover{filter:brightness(1.05)}
+    button.ghost{background:transparent;border-color:#2b3850}
+    button.ghost:hover{background:#182233}
+    input[type=text],input[type=email],input[type=password],input[type=number]{border-radius:12px;padding:10px 12px;border:1px solid #2b3850;outline:none}
+    input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.25)}
+    .log{background:#0e141e;border:1px dashed #2a3650;border-radius:12px}
+    .codes{font-variant-ligatures:none;line-height:1.45}
+    .badge{display:inline-flex;align-items:center;gap:8px;padding:.35rem .7rem;border-radius:9999px;border:1px solid #31415e;background:#0f1522;color:#cbd5e1;font-size:12.5px;line-height:1;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+    .badge.success{color:#d1fae5;border-color:#065f46;background:#064e3b88}
+    .badge.warn{color:#ffe2b8;border-color:#b45309;background:#713f1288}
+    #whoAdmin{max-width:50vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     /* --- AUTH GATING --- */
     .auth .auth-only { display: none !important; }
     .unauth .authed-only { display: none !important; }
@@ -51,6 +68,21 @@
     .auth .authed-only { visibility: visible; }
 
   </style>
+  <script>
+    (function(){
+      const css = document.createElement('style');
+      css.textContent = `
+      :root[data-theme="light"]{--bg:#f7fafc;--card:#ffffff;--text:#0f172a;--muted:#4b5563}
+      :root[data-theme="light"] body{background:var(--bg);color:var(--text)}
+      :root[data-theme="light"] .card{border-color:#d6dde7;background:linear-gradient(180deg,#ffffff 0%,#f4f7fb 100%)}
+      :root[data-theme="light"] .log{background:#fff;border-color:#d8e1ee}
+      :root[data-theme="light"] .badge{background:#f1f5f9;border-color:#cbd5e1;color:#0f172a}
+      :root[data-theme="light"] header{background:#ffffffd9;border-bottom-color:#e5e7eb}
+      :root[data-theme="light"] input, :root[data-theme="light"] button.ghost{border-color:#cbd5e1;background:#fff;color:#0f172a}
+      `;
+      document.head.appendChild(css);
+    })();
+  </script>
 
 </head>
 <body class="unauth">
@@ -81,7 +113,8 @@
           <button id="btnLogoutAdmin" class="ghost">Logout</button>
         </div>
         <div class="row" style="gap:8px">
-          <span id="whoAdmin" class="badge authed-only"></span>
+          <button id="btnTheme" class="ghost">Light Mode</button>
+          <span id="whoAdmin" class="badge user authed-only"></span>
           <span id="roleStatus" class="badge hidden"></span>
         </div>
       </div>
