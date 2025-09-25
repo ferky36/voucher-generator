@@ -1,5 +1,5 @@
 // js/admin.js
-import { supabase, $, toastBadge } from './app.js';
+import { supabase, $, toastBadge, explainErr } from './app.js';
 
 // AUTH Admin (email/password)
 const authBox = $('#authBox');
@@ -21,8 +21,10 @@ btnLogin?.addEventListener('click', async ()=>{
   const { error } = await supabase.auth.signInWithPassword({
     email: email.value, password: password.value
   });
-  if (error) toastBadge(authStatus, error.message, 'warn');
-  else {
+  if (error) {
+    const { message } = explainErr(error);
+    toastBadge(authStatus, message, 'warn');
+  } else {
     toastBadge(authStatus, 'Login sukses');
     authBox?.classList.add('hidden');
     document.body.classList.add('auth');
@@ -143,7 +145,7 @@ $('#btnImport').onclick = async () => {
     toastBadge(importStatus, 'Menghapus semua voucher…');
     try {
       const { error: wipeErr } = await supabase.rpc('wipe_vouchers');
-      if (wipeErr) { toastBadge(importStatus, 'Gagal hapus: ' + wipeErr.message, 'warn'); return; }
+      if (wipeErr) { const { message } = explainErr(wipeErr); toastBadge(importStatus, 'Gagal hapus: ' + message, 'warn'); return; }
       toastBadge(importStatus, 'Semua voucher dihapus. Melanjutkan import…');
     } catch (e) {
       toastBadge(importStatus, e.message || 'Gagal hapus', 'warn');
@@ -168,7 +170,7 @@ $('#btnImport').onclick = async () => {
       } else {
         ({ data, error } = await supabase.rpc('import_vouchers', { p_codes: slice }));
       }
-    if (error){ toastBadge($('#importStatus'), error.message, 'warn'); return; }
+    if (error){ const { message } = explainErr(error); toastBadge($('#importStatus'), message, 'warn'); return; }
     if (data){ inserted += (data.inserted||0); invalid += (data.invalid||0); total += (data.total||0); }
   }
   toastBadge($('#importStatus'), `Import OK: ${inserted} masuk, ${invalid} invalid dari ${total}`);
@@ -207,7 +209,7 @@ btnWhoAmI?.addEventListener('click', async () => {
     .select('user_id,email,role,created_at')
     .eq('user_id', user.id)
     .maybeSingle();
-  if (error) { toastBadge(roleStatus, 'Gagal cek role: '+error.message, 'warn'); return; }
+  if (error) { const { message } = explainErr(error); toastBadge(roleStatus, 'Gagal cek role: '+message, 'warn'); return; }
   if (!data) { toastBadge(roleStatus, 'Belum ada profile. Klik "Jadikan Saya ADMIN" untuk membuat.', 'warn'); return; }
   toastBadge(roleStatus, `Role: ${data.role || 'user'} (${data.email||user.email||''})`);
 });
@@ -221,6 +223,6 @@ btnMakeMeAdmin?.addEventListener('click', async () => {
     .upsert(payload, { onConflict: 'user_id', ignoreDuplicates: false })
     .select()
     .maybeSingle();
-  if (error) { toastBadge(roleStatus, 'Gagal set admin: '+error.message, 'warn'); return; }
+  if (error) { const { message } = explainErr(error); toastBadge(roleStatus, 'Gagal set admin: '+message, 'warn'); return; }
   toastBadge(roleStatus, 'Sukses: role kamu sekarang ADMIN');
 });

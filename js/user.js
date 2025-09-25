@@ -1,5 +1,5 @@
 // js/user.js
-import { supabase, $, sleep, setHidden, toastBadge } from './app.js';
+import { supabase, $, sleep, setHidden, toastBadge, explainErr } from './app.js';
 
 // OTP login
 const userAuthBox = $('#userAuthBox');
@@ -56,7 +56,10 @@ btnSendOtp?.addEventListener('click', async ()=>{
       email: email,
       options: { emailRedirectTo: window.location.href }
     });
-    if (error) toastBadge(getStatusEl(), error.message, 'warn');
+    if (error) {
+      const { message } = explainErr(error);
+      toastBadge(getStatusEl(), message, 'warn');
+    }
     else toastBadge(getStatusEl(), 'Link OTP dikirim ke '+email+'. Cek email kamu.');
   } finally {
     btnSendOtp.disabled = false;
@@ -99,7 +102,11 @@ function formatRemaining(sec){
 async function updateEligibility(){
   try{
     const { data, error } = await supabase.rpc('get_generate_eligibility');
-    if (error) return; // silent
+    if (error) {
+      const { message } = explainErr(error);
+      toastBadge(getStatusEl(), message, 'warn');
+      return;
+    }
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return;
     if (row.eligible){
@@ -168,21 +175,23 @@ btnGenerate.onclick = async () => {
     // Klaim via RPC (otomatis pakai auth.uid())
     const { data, error } = await supabase.rpc('claim_code');
     if (error){
-      const msg = (error.message||'').toString();
-      if (msg.startsWith('NOT_ELIGIBLE:COOLDOWN:')){
-        const sec = parseInt(msg.split(':')[2]||'0',10)||0;
-        const hours = Math.floor(sec/3600), minutes = Math.floor((sec%3600)/60);
-        toastBadge(getStatusEl(), `Kamu sudah pernah generate dan memunculkan voucher. Coba lagi dalam ${hours} jam ${minutes} menit.`, 'warn');
+      const { code, message } = explainErr(error);
+      if (code === 'COOLDOWN'){
+        toastBadge(getStatusEl(), 'Kamu sudah pernah generate dan memunculkan voucher. ' + message, 'warn');
         const last = await fetchLastUsedVoucher();
         if (last) showUsedVoucher(last);
-      } else if (msg.startsWith('NOT_ELIGIBLE:HAS_ACTIVE_CLAIM')){
+      } else if (code === 'HAS_ACTIVE_CLAIM'){
         const row = await fetchActiveClaim();
         if (row) { showClaimUI(row); toastBadge(getStatusEl(), 'Voucher kamu sudah tersedia. Geser slider untuk memunculkannya.', 'warn'); }
         else { toastBadge(getStatusEl(), 'Kamu sudah pernah generate tapi belum memunculkan voucher. Geser slider untuk memunculkannya.', 'warn'); }
-      } else if (msg.startsWith('OUT_OF_STOCK')){
+      } else if (code === 'OUT_OF_STOCK'){
         toastBadge(getStatusEl(), 'Stok voucher habis', 'warn');
+      } else if (code === 'FORBIDDEN_DOMAIN'){
+        toastBadge(getStatusEl(), message, 'warn');
+      } else if (code === 'UNAUTHENTICATED'){
+        toastBadge(getStatusEl(), 'Harus login untuk generate voucher.', 'warn');
       } else {
-        alert('Gagal generate: '+msg);
+        toastBadge(getStatusEl(), 'Gagal generate: ' + message, 'warn');
       }
       setHidden(btnGenerate,false);
       updateEligibility();
@@ -211,10 +220,15 @@ revealSlider.addEventListener('input', async (e)=>{
     // Tandai used via RPC (gunakan fungsi yang benar)
     try {
       if (!usedMarked && claimed) {
-        await supabase.rpc('mark_voucher_used', { p_voucher_id: claimed.id });
-        usedMarked = true;
+        const { error } = await supabase.rpc('mark_voucher_used', { p_voucher_id: claimed.id });
+        if (error){
+          const { message } = explainErr(error);
+          toastBadge(getStatusEl(), 'Gagal menandai voucher: ' + message, 'warn');
+        } else {
+          usedMarked = true;
+        }
       }
-    } catch(_) {}
+    } catch(ex){ toastBadge(getStatusEl(), 'Gagal menandai voucher: ' + (ex?.message||'Unknown'), 'warn'); }
       revealSlider.disabled = true;
       // btnGenerate tetap bisa diklik; hanya slider yang dikunci
     }

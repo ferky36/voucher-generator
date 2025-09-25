@@ -10,3 +10,49 @@ export const $ = (s)=>document.querySelector(s);
 export const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
 export function setHidden(el, bool){ el.classList.toggle('hidden', !!bool); }
 export function toastBadge(el, text, cls="success"){ el.textContent=text; el.className = `badge ${cls}`; setHidden(el,false); setTimeout(()=>setHidden(el,true),5000); }
+
+// Normalisasi error Supabase/Postgres (RPC)
+export function explainErr(error){
+  if (!error) return { code: null, message: 'OK' };
+  const code = error.code || null; // e.g. P0001 (RAISE EXCEPTION)
+  const raw = (error.message || '').toString();
+
+  // Known application-level messages from SQL
+  if (raw.startsWith('UNAUTHENTICATED'))
+    return { code: 'UNAUTHENTICATED', message: 'Harus login terlebih dahulu.' };
+  if (raw.startsWith('FORBIDDEN_DOMAIN')){
+    const dom = raw.split(':')[1] || 'domain yang diperbolehkan';
+    return { code: 'FORBIDDEN_DOMAIN', message: `Email harus menggunakan @${dom}.` };
+  }
+  if (raw.startsWith('NOT_ELIGIBLE:HAS_ACTIVE_CLAIM'))
+    return { code: 'HAS_ACTIVE_CLAIM', message: 'Kamu sudah punya voucher yang belum dimunculkan.' };
+  if (raw.startsWith('NOT_ELIGIBLE:COOLDOWN:')){
+    const sec = parseInt(raw.split(':')[2]||'0',10) || 0;
+    const hours = Math.floor(sec/3600), minutes = Math.floor((sec%3600)/60);
+    return { code: 'COOLDOWN', message: `Coba lagi dalam ${hours} jam ${minutes} menit.` };
+  }
+  if (raw.startsWith('OUT_OF_STOCK'))
+    return { code: 'OUT_OF_STOCK', message: 'Stok voucher habis.' };
+  if (raw.startsWith('CANNOT_MARK_USED'))
+    return { code: 'CANNOT_MARK_USED', message: 'Voucher tidak dapat ditandai digunakan (mungkin sudah digunakan atau bukan milikmu).' };
+  if (/Only admin can (import|wipe)/i.test(raw))
+    return { code: 'ADMIN_ONLY', message: 'Aksi ini hanya untuk ADMIN.' };
+
+  // Auth API common errors
+  if (error.name === 'AuthApiError' || error.name === 'AuthError'){
+    // supabase-js error codes (not always standardized)
+    if (/invalid login credentials/i.test(raw))
+      return { code: 'INVALID_CREDENTIALS', message: 'Email atau password salah.' };
+    if (/email not confirmed/i.test(raw))
+      return { code: 'EMAIL_NOT_CONFIRMED', message: 'Email belum terverifikasi.' };
+    if (/over_email_send_rate_limit|rate limit/i.test(raw))
+      return { code: 'RATE_LIMIT', message: 'Terlalu sering meminta OTP. Coba beberapa menit lagi.' };
+    if (/smtp|not configured/i.test(raw))
+      return { code: 'SMTP_NOT_CONFIGURED', message: 'Email OTP tidak tersedia (SMTP belum dikonfigurasi).' };
+    if (/invalid email/i.test(raw))
+      return { code: 'INVALID_EMAIL', message: 'Format email tidak valid.' };
+  }
+
+  // Fallback
+  return { code: code || 'UNKNOWN', message: raw || 'Terjadi kesalahan yang tidak diketahui.' };
+}
