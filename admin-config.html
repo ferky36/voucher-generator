@@ -37,6 +37,11 @@
     .loading{display:inline-flex;gap:8px;align-items:center}
     .loading:before{content:"";width:14px;height:14px;border:2px solid #cbd5e1;border-top-color:transparent;border-radius:50%;display:inline-block;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
+    /* modal */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+    .modal{background:#121722;border:1px solid #232b3a;border-radius:12px;padding:16px;max-width:420px;width:92%}
+    .modal h3{margin:0 0 10px;font-size:16px}
+    .modal .row{justify-content:flex-end}
     /* --- AUTH GATING --- */
     .auth .auth-only { display: none !important; }
     .unauth .authed-only { display: none !important; }
@@ -76,6 +81,17 @@
       </div>
     </div>
 
+    <div class="card authed-only" id="settingsCard" style="margin-bottom:12px;background:#0f131b">
+      <h3 style="margin:0 0 8px">Pengaturan Klaim</h3>
+      <div class="row" style="align-items:center">
+        <label style="margin:0">Max voucher per user (lifetime)</label>
+        <input id="maxClaims" type="number" min="0" step="1" placeholder="mis. 5" style="width:120px" />
+        <button id="btnSaveMaxClaims" class="primary">Simpan</button>
+        <span id="maxClaimsStatus" class="badge hidden"></span>
+      </div>
+      <small class="badge">0 atau kosong = tidak dibatasi</small>
+    </div>
+
     <div class="card authed-only" id="adminMainCard">
       <label>Gambar voucher (bisa banyak)</label>
       <input id="imgFiles" type="file" multiple accept="image/*,application/pdf" />
@@ -105,7 +121,19 @@
   </div>
   </div>
 
-  
+  <!-- Modal password admin -->
+  <div id="adminPwdModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>Konfirmasi Admin</h3>
+      <p>Masukkan password akun untuk konfirmasi jadi ADMIN:</p>
+      <input id="adminPwdInput" type="password" placeholder="Password" style="width:100%;margin:8px 0" />
+      <div class="row">
+        <button id="btnAdminPwdCancel" class="ghost">Batal</button>
+        <button id="btnAdminPwdOk" class="primary">OK</button>
+      </div>
+    </div>
+  </div>
+
 
   <script type="module" src="./js/app.js"></script>
   <script type="module" src="./js/admin.js"></script>

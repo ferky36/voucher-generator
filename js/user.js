@@ -89,6 +89,8 @@ function paintSlider(slider){
 const voucherShow = $('#voucherShow');
 const voucherCodeEl = $('#voucherCode');
 const btnCopy = $('#btnCopy');
+const myVouchersEl = $('#myVouchers');
+const remainClaimsEl = $('#remainClaims');
 
 // === Eligibility helpers (UI-only) ===
 function formatRemaining(sec){
@@ -122,8 +124,11 @@ async function updateEligibility(){
       const active = await fetchActiveClaim();
       if (active) showClaimUI(active);
       setHidden(btnGenerate,true);
+    } else if (row.reason === 'LIMIT_REACHED'){
+      toastBadge(getStatusEl(), 'Batas maksimal klaim telah tercapai.', 'warn');
     }
   }catch(e){ /* ignore */ }
+  await paintUserVouchers();
 }
 
 // Ambil voucher yang sudah di-claim tapi belum dipakai
@@ -283,4 +288,36 @@ function showUsedVoucher(row){
     if (typeof paintSlider === 'function') paintSlider(revealSlider);
   }
   setHidden(btnGenerate, true);                // sembunyikan tombol generate
+}
+
+// Riwayat voucher + remaining
+async function paintUserVouchers(){
+  try{
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { if (myVouchersEl) myVouchersEl.textContent=''; if (remainClaimsEl) remainClaimsEl.textContent=''; return; }
+    const { data: rows, error } = await supabase
+      .from('vouchers')
+      .select('id, code, status, claimed_at, used_at')
+      .or(`claimed_by.eq.${user.id},used_by.eq.${user.id}`)
+      .order('claimed_at', { ascending:false })
+      .limit(50);
+    if (error) { if (myVouchersEl) myVouchersEl.textContent = 'Gagal memuat riwayat.'; return; }
+    const lines = (rows||[]).map(r=>{
+      const s = r.used_at ? 'used' : (r.status||'');
+      return `${r.code}  [${s}]  ${r.claimed_at||''}`;
+    });
+    if (myVouchersEl) myVouchersEl.textContent = lines.length? lines.join('\n') : 'Belum ada riwayat.';
+
+    // remaining
+    const { data: maxRes } = await supabase.rpc('get_max_claims_per_user');
+    const max = parseInt(maxRes||0,10) || 0;
+    let usedCnt = (rows||[]).filter(r=>!!r.used_at).length;
+    let activeCnt = (rows||[]).filter(r=>!r.used_at && (r.status==='claimed')).length;
+    if (max>0 && remainClaimsEl){
+      const left = Math.max(0, max - (usedCnt + activeCnt));
+      remainClaimsEl.textContent = `Sisa klaim: ${left} / ${max}`;
+    } else if (remainClaimsEl){
+      remainClaimsEl.textContent = 'Tanpa batas';
+    }
+  }catch{}
 }

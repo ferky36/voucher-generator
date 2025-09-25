@@ -12,6 +12,9 @@ const authStatus = $('#authStatus');
 const ADMIN_PW_OK_KEY = 'admin_pw_ok';
 const roleCard = $('#roleCard');
 const adminMainCard = $('#adminMainCard');
+const maxClaimsInput = $('#maxClaims');
+const btnSaveMaxClaims = $('#btnSaveMaxClaims');
+const maxClaimsStatus = $('#maxClaimsStatus');
 
 async function paintAdminUIFromSession(){
   const { data:{ session } } = await supabase.auth.getSession();
@@ -48,6 +51,17 @@ async function paintAdminUIFromSession(){
 
 (async ()=>{ await paintAdminUIFromSession(); })();
 
+async function loadMaxClaims(){
+  try{
+    const { data, error } = await supabase.rpc('get_max_claims_per_user');
+    if (!error && typeof data !== 'undefined' && maxClaimsInput){
+      maxClaimsInput.value = (data || 0);
+    }
+  }catch{}
+}
+
+(async ()=>{ await loadMaxClaims(); })();
+
 btnLogin?.addEventListener('click', async ()=>{
   const { error } = await supabase.auth.signInWithPassword({
     email: email.value, password: password.value
@@ -74,6 +88,13 @@ const doAdminLogout = async ()=>{
 
 btnLogoutAdmin?.addEventListener('click', doAdminLogout);
 btnLogoutAdminHeader?.addEventListener('click', doAdminLogout);
+
+btnSaveMaxClaims?.addEventListener('click', async ()=>{
+  const val = parseInt((maxClaimsInput?.value||'0'),10);
+  const { error } = await supabase.rpc('set_max_claims_per_user', { p_value: isNaN(val)?0:val });
+  if (error){ const { message } = explainErr(error); toastBadge(maxClaimsStatus, message, 'warn'); }
+  else { toastBadge(maxClaimsStatus, 'Tersimpan'); }
+});
 
 // OCR + Import
 const imgInput = $('#imgFiles');
@@ -292,6 +313,31 @@ btnRlsDiag?.addEventListener('click', async () => {
 const roleStatus = $('#roleStatus');
 const btnWhoAmI = $('#btnWhoAmI');
 const btnMakeMeAdmin = $('#btnMakeMeAdmin');
+// Modal elemen
+const adminPwdModal = $('#adminPwdModal');
+const adminPwdInput = $('#adminPwdInput');
+const btnAdminPwdOk = $('#btnAdminPwdOk');
+const btnAdminPwdCancel = $('#btnAdminPwdCancel');
+
+function openPwdModal(){
+  return new Promise((resolve)=>{
+    if (!adminPwdModal) return resolve(null);
+    adminPwdInput.value = '';
+    adminPwdModal.classList.remove('hidden');
+    try{ adminPwdInput.focus(); }catch{}
+    const onOk = ()=>{ cleanup(); resolve(adminPwdInput.value || null); };
+    const onCancel = ()=>{ cleanup(); resolve(null); };
+    function cleanup(){
+      btnAdminPwdOk?.removeEventListener('click', onOk);
+      btnAdminPwdCancel?.removeEventListener('click', onCancel);
+      adminPwdModal.classList.add('hidden');
+    }
+    btnAdminPwdOk?.addEventListener('click', onOk, { once:true });
+    btnAdminPwdCancel?.addEventListener('click', onCancel, { once:true });
+    const onKey = (e)=>{ if (e.key==='Enter') onOk(); if (e.key==='Escape') onCancel(); };
+    adminPwdInput?.addEventListener('keydown', onKey, { once:true });
+  });
+}
 
 btnWhoAmI?.addEventListener('click', async () => {
   const { data: { user } } = await supabase.auth.getUser();
@@ -309,7 +355,7 @@ btnWhoAmI?.addEventListener('click', async () => {
 btnMakeMeAdmin?.addEventListener('click', async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) { toastBadge(roleStatus, 'Belum login', 'warn'); return; }
-  const pwd = prompt('Masukkan password akun kamu untuk konfirmasi jadi ADMIN:');
+  const pwd = await openPwdModal();
   if (!pwd) { toastBadge(roleStatus, 'Dibatalkan', 'warn'); return; }
   const { error: authErr } = await supabase.auth.signInWithPassword({ email: user.email, password: pwd });
   if (authErr) { const { message } = explainErr(authErr); toastBadge(roleStatus, 'Password salah: '+message, 'warn'); return; }

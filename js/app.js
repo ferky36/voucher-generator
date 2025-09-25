@@ -55,6 +55,8 @@ export function explainErr(error){
     return { code: 'ADMIN_ONLY', message: 'Aksi ini hanya untuk ADMIN.' };
   if (raw.startsWith('ONLY_PASSWORD_USERS'))
     return { code: 'ONLY_PASSWORD_USERS', message: 'Hanya akun dengan password (bukan OTP) yang boleh menjadikan dirinya ADMIN.' };
+  if (raw.startsWith('LIMIT_REACHED'))
+    return { code: 'LIMIT_REACHED', message: 'Batas maksimal klaim voucher telah tercapai.' };
 
   // Auth API common errors
   if (error.name === 'AuthApiError' || error.name === 'AuthError'){
