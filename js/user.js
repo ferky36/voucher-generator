@@ -88,8 +88,17 @@ function paintSlider(slider){
   slider.style.background = `linear-gradient(to right, ${active} 0%, ${active} ${pct}%, ${bg} ${pct}%, ${bg} 100%)`;
   try{
     if (sliderBubble){
-      sliderBubble.style.left = pct+'%';
       sliderBubble.textContent = pct+'%';
+      if (pct < 8){
+        sliderBubble.style.left = '0%';
+        sliderBubble.style.transform = 'translateX(0)';
+      } else if (pct > 92){
+        sliderBubble.style.left = '100%';
+        sliderBubble.style.transform = 'translateX(-100%)';
+      } else {
+        sliderBubble.style.left = pct+'%';
+        sliderBubble.style.transform = 'translateX(-50%)';
+      }
     }
   }catch{}
 }
