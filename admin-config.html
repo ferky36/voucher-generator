@@ -9,7 +9,7 @@
   <title>Voucher System – Admin</title>
   <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
   
-  <style>
+  <link rel="stylesheet" href="./css/styles.css">
     :root{--accent:#2f80ed;--ok:#10b981;--warn:#f59e0b;--bg:#0b0d12;--card:#121722;--text:#e6edf5;--muted:#9aa7b2;}
     *{box-sizing:border-box}
     body{margin:0;font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--text)}
@@ -60,6 +60,9 @@
     .badge.success{color:#d1fae5;border-color:#065f46;background:#064e3b88}
     .badge.warn{color:#ffe2b8;border-color:#b45309;background:#713f1288}
     #whoAdmin{max-width:50vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* progress bar */
+    .progress{width:100%;height:10px;background:#1b2433;border:1px solid #2b3850;border-radius:999px;overflow:hidden}
+    .progress-bar{height:100%;width:0;background:linear-gradient(90deg,#3b82f6,#1e66d0);transition:width .2s ease}
     /* --- AUTH GATING --- */
     .auth .auth-only { display: none !important; }
     .unauth .authed-only { display: none !important; }
@@ -67,22 +70,8 @@
     .authed-only { visibility: hidden; }
     .auth .authed-only { visibility: visible; }
 
-  </style>
-  <script>
-    (function(){
-      const css = document.createElement('style');
-      css.textContent = `
-      :root[data-theme="light"]{--bg:#f7fafc;--card:#ffffff;--text:#0f172a;--muted:#4b5563}
-      :root[data-theme="light"] body{background:var(--bg);color:var(--text)}
-      :root[data-theme="light"] .card{border-color:#d6dde7;background:linear-gradient(180deg,#ffffff 0%,#f4f7fb 100%)}
-      :root[data-theme="light"] .log{background:#fff;border-color:#d8e1ee}
-      :root[data-theme="light"] .badge{background:#f1f5f9;border-color:#cbd5e1;color:#0f172a}
-      :root[data-theme="light"] header{background:#ffffffd9;border-bottom-color:#e5e7eb}
-      :root[data-theme="light"] input, :root[data-theme="light"] button.ghost{border-color:#cbd5e1;background:#fff;color:#0f172a}
-      `;
-      document.head.appendChild(css);
-    })();
-  </script>
+  
+  
 
 </head>
 <body class="unauth">
@@ -111,9 +100,9 @@
           <button id="btnWhoAmI" class="ghost">Cek Role Saya</button>
           <button id="btnMakeMeAdmin" class="primary">Jadikan Saya ADMIN</button>
           <button id="btnLogoutAdmin" class="ghost">Logout</button>
+          <button id="btnTheme" class="ghost">Light Mode</button>
         </div>
         <div class="row" style="gap:8px">
-          <button id="btnTheme" class="ghost">Light Mode</button>
           <span id="whoAdmin" class="badge user authed-only"></span>
           <span id="roleStatus" class="badge hidden"></span>
         </div>
@@ -169,6 +158,18 @@
       <div class="row">
         <button id="btnAdminPwdCancel" class="ghost">Batal</button>
         <button id="btnAdminPwdOk" class="primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OCR overlay progress -->
+  <div id="ocrOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>Memproses OCR</h3>
+      <p id="ocrFile">Menyiapkan…</p>
+      <div class="progress"><div id="ocrBar" class="progress-bar"></div></div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnOcrCancel" class="ghost">Batal</button>
       </div>
     </div>
   </div>

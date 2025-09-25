@@ -14,6 +14,7 @@ try { setHidden(genLoading, true); } catch(e) {}
 const claimWrap = $('#claimWrap');
 const revealSlider = $('#revealSlider');
 const sliderWrap = $('#sliderWrap');
+const sliderBubble = document.getElementById('sliderBubble');
 
 // Pastikan loading tersembunyi saat awal muat
 
@@ -85,6 +86,12 @@ function paintSlider(slider){
   const active = '#3b82f6'; // biru
   const bg = '#2b3440';
   slider.style.background = `linear-gradient(to right, ${active} 0%, ${active} ${pct}%, ${bg} ${pct}%, ${bg} 100%)`;
+  try{
+    if (sliderBubble){
+      sliderBubble.style.left = pct+'%';
+      sliderBubble.textContent = pct+'%';
+    }
+  }catch{}
 }
 
 const voucherShow = $('#voucherShow');

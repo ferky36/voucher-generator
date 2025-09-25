@@ -16,6 +16,12 @@ const whoAdmin = document.getElementById('whoAdmin');
 const maxClaimsInput = $('#maxClaims');
 const btnSaveMaxClaims = $('#btnSaveMaxClaims');
 const maxClaimsStatus = $('#maxClaimsStatus');
+// OCR overlay
+const ocrOverlay = $('#ocrOverlay');
+const ocrFile = $('#ocrFile');
+const ocrBar = $('#ocrBar');
+const btnOcrCancel = $('#btnOcrCancel');
+let _ocrCancel = false;
 
 async function paintAdminUIFromSession(){
   const { data:{ session } } = await supabase.auth.getSession();
@@ -210,29 +216,50 @@ $('#btnClear').onclick = ()=>{ ocrCodes=[]; batchValidityDays=null; ocrOut.textC
 
 $('#btnOcr').onclick = async () => {
   ocrOut.textContent = 'Proses OCR...';
+  _ocrCancel = false;
+  if (ocrOverlay) ocrOverlay.classList.remove('hidden');
+  if (ocrBar) ocrBar.style.width = '0%';
+  if (ocrFile) ocrFile.textContent = 'Menyiapkan…';
+  btnOcrCancel?.addEventListener('click', ()=>{ _ocrCancel = true; if (ocrOverlay) ocrOverlay.classList.add('hidden'); }, { once:true });
 
   const { Tesseract, opts } = await ensureTesseract();
   const files = [...imgInput.files];
-  if (!files.length) { ocrOut.textContent = 'Pilih file dulu'; return; }
+  if (!files.length) { ocrOut.textContent = 'Pilih file dulu'; if (ocrOverlay) ocrOverlay.classList.add('hidden'); return; }
 
   const found = new Set();
   let anyValidDays = null;
-  for (const f of files){
+  const total = files.length;
+  for (let i=0;i<files.length;i++){
+    if (_ocrCancel) break;
+    const f = files[i];
     let text = '';
     const name = (f.name||'').toLowerCase();
+    if (ocrFile) ocrFile.textContent = `Memproses ${f.name||'gambar'}…`;
     if (f.type === 'application/pdf' || name.endsWith('.pdf')){
       text = await extractPdfText(f);
+      if (ocrBar) ocrBar.style.width = `${Math.round(((i+1)/total)*100)}%`;
     } else if (f.type === 'text/plain' || name.endsWith('.txt')){
       text = await f.text();
+      if (ocrBar) ocrBar.style.width = `${Math.round(((i+1)/total)*100)}%`;
     } else {
       try {
-        const { data:{ text: t } } = await Tesseract.recognize(f, 'eng', opts || {});
+        const recOpts = Object.assign({}, opts||{}, { logger: m => {
+          if (m && typeof m.progress === 'number'){
+            const overall = ((i + Math.max(0,Math.min(1,m.progress)))/total)*100;
+            if (ocrBar) ocrBar.style.width = `${Math.round(overall)}%`;
+          }
+        }});
+        const { data:{ text: t } } = await Tesseract.recognize(f, 'eng', recOpts);
         text = t || '';
       } catch (e) {
-        // As a safety net: try CDN defaults if self-hosted assets incomplete
         try {
           const cdn = (await import('https://cdn.skypack.dev/tesseract.js@5.0.3')).default;
-          const { data:{ text: t } } = await cdn.recognize(f, 'eng');
+          const { data:{ text: t } } = await cdn.recognize(f, 'eng', { logger: m=>{
+            if (m && typeof m.progress==='number'){
+              const overall = ((i + Math.max(0,Math.min(1,m.progress)))/total)*100;
+              if (ocrBar) ocrBar.style.width = `${Math.round(overall)}%`;
+            }
+          }});
           text = t || '';
         } catch (ee) {
           throw e;
@@ -251,6 +278,7 @@ $('#btnOcr').onclick = async () => {
     ? `${ocrCodes.length} kode terdeteksi (unik)\n` + ocrCodes.join('\n')
       + (batchValidityDays ? `\n(validity_days=${batchValidityDays})` : '')
     : 'Tidak ada kode terdeteksi.';
+  if (ocrOverlay) ocrOverlay.classList.add('hidden');
 };
 
 $('#btnImport').onclick = async () => {
