@@ -32,7 +32,7 @@ supabase.auth.onAuthStateChange((_evt, session)=>{
   document.body.classList.toggle('auth', !!session);
   document.body.classList.toggle('unauth', !session);
   try { setHidden(genLoading, true); } catch(e) {}
-  // updateEligibility();
+  updateEligibility();
   paintSlider(revealSlider);
   if (session) userAuthBox?.classList.add('hidden');
   else userAuthBox?.classList.remove('hidden');
@@ -208,8 +208,13 @@ revealSlider.addEventListener('input', async (e)=>{
     voucherCodeEl.textContent = claimed.code;
     setHidden(voucherShow,false);
 
-    // Tandai used via RPC
-    try { if (!usedMarked && claimed) { await supabase.rpc('use_code', { p_id: claimed.id }); usedMarked = true; } } catch(_) {}
+    // Tandai used via RPC (gunakan fungsi yang benar)
+    try {
+      if (!usedMarked && claimed) {
+        await supabase.rpc('mark_voucher_used', { p_voucher_id: claimed.id });
+        usedMarked = true;
+      }
+    } catch(_) {}
       revealSlider.disabled = true;
       // btnGenerate tetap bisa diklik; hanya slider yang dikunci
     }

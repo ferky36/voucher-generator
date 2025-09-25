@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com https://cdn.skypack.dev 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'">
+  <meta http-equiv="Referrer-Policy" content="no-referrer">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <title>Voucher System – User</title>
   <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
   
@@ -75,7 +78,7 @@
 
       <div id="claimWrap" class="hidden" style="width:100%">
         <p class="badge warn">Geser slider sampai penuh untuk <strong>menampilkan</strong> dan <strong>menggunakan</strong> voucher.</p>
-        <div class="sliderWrap">
+        <div id="sliderWrap" class="sliderWrap">
           <input id="revealSlider" type="range" value="0" min="0" max="100" />
           <div class="row" style="justify-content:space-between;color:#9aa7b2">
             <span>Geser ▶</span>
